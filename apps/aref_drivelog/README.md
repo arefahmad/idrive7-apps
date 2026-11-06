@@ -3,7 +3,7 @@
 A record of every drive, kept by the head unit itself: distance, time moving, top speed, 0-60 mph, peak
 rpm, peak g-forces and temperatures. With a Dragy, it learns its own error and shows a Dragy-adjusted 0-60.
 
-Version 0.3.0 · iDrive 7 · package `aref_drivelog` · [all apps and how to install](../../README.md)
+Version 0.3.1 · iDrive 7 · package `aref_drivelog` · [all apps and how to install](../../README.md)
 
 > [!NOTE]
 > Not tested on a car yet. It uses the same driving signals as G's Dash and M Vitals (speed, rpm,
@@ -31,31 +31,31 @@ Screens rendered on a PC from the app's own drawing code with made-up data (`too
 
 ### This drive
 
-![This drive](screenshots/this-drive.png)
+![This drive](../../docs/screenshots/aref_drivelog/this-drive.png)
 
 The drive going on, or the last one, with the Dragy-adjusted 0-60 under the car's own time.
 
 ### History
 
-![History](screenshots/history.png)
+![History](../../docs/screenshots/aref_drivelog/history.png)
 
 Every drive kept, newest first.
 
 ### 0-60 runs
 
-![0-60 runs](screenshots/runs.png)
+![0-60 runs](../../docs/screenshots/aref_drivelog/runs.png)
 
 Each run with its Dragy time, the difference, and the adjusted time. The offset is in the top right.
 
 ### Enter Dragy time
 
-![Enter Dragy time](screenshots/enter-dragy.png)
+![Enter Dragy time](../../docs/screenshots/aref_drivelog/enter-dragy.png)
 
 Setting the Dragy's time for a run with the bar buttons.
 
 ### Home-screen widget
 
-![Home-screen widget](screenshots/widget.png)
+![Home-screen widget](../../docs/screenshots/aref_drivelog/widget.png)
 
 Add it to the iDrive home screen like BMW's own widgets: this drive or the last one: distance, top speed, time, and the 0-60 (Dragy-adjusted once calibrated). The small size shows the same as two lines of text.
 

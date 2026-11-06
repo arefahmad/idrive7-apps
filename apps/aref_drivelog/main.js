@@ -21,7 +21,7 @@ const { Trips, csv } = require('./trip');
 const { DragyCal, READY_N } = require('./dragy');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 const W = 1600, H = 520;
 const SAVE_MS = 30000;
 const ROWS = 7;

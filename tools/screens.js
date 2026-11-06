@@ -2,7 +2,7 @@
 /**
  * screens.js - renders each app's screens on a PC with made-up data, for the READMEs.
  *
- *   node tools/screens.js            -> apps/<id>/screenshots/*.png
+ *   node tools/screens.js            -> docs/screenshots/<id>/*.png (outside apps/: the build would install them)
  *
  * It runs an app's real main.js and drawing code against stand-ins for the head unit: the kit's runtime
  * (mgu.js: screens, buttons, settings), the car's signals (Car), the diagnostic link (Diag) and the
@@ -84,19 +84,19 @@ function harness(id, opts) {
         ready: () => Promise.resolve(ctx.started).then(() => new Promise((r) => setTimeout(r, 50))),
         async widget(file) {
             const cv = await widgetFn({ spawnId: 1, big: true, visible: true });
-            const out = path.join(appDir, 'screenshots');
+            const out = path.join(ROOT, 'docs', 'screenshots', id);
             fs.mkdirSync(out, { recursive: true });
             fs.writeFileSync(path.join(out, file), cv.png(9));
-            console.log('wrote apps/' + id + '/screenshots/' + file);
+            console.log('wrote docs/screenshots/' + id + '/' + file);
         },
         async shot(screen, file) {
             await loops[screen]();
             const rec = images[screen + '_GFX'], cv = new Canvas(rec.w, rec.h);
             play(rec.words(), cv);                // played back into pixels, as the car does without the GPU renderer
-            const out = path.join(appDir, 'screenshots');
+            const out = path.join(ROOT, 'docs', 'screenshots', id);
             fs.mkdirSync(out, { recursive: true });
             fs.writeFileSync(path.join(out, file), cv.png(9));
-            console.log('wrote apps/' + id + '/screenshots/' + file);
+            console.log('wrote docs/screenshots/' + id + '/' + file);
         },
     };
 }

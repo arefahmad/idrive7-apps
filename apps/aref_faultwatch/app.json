@@ -2,7 +2,7 @@
   "id": "aref_faultwatch",
   "title": "Fault Watch",
   "description": "Reads every control unit's fault memory in the background every few minutes while the car is on, and keeps a timeline of what changed: new faults, faults that turn active, faults that clear. Each entry has the time and the drive at that moment (speed, gear, rpm, oil, drive mode), so an intermittent fault can be matched to when it happened. Read-only: it never clears or writes anything. Starts with the car.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "vendor": "aref",
   "loggingId": "OAR2",
   "mguAppStartType": "autostart",

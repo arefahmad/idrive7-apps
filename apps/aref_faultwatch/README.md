@@ -3,7 +3,7 @@
 Reads every control unit's fault memory in the background while the car is on, and keeps a timeline of
 what changed and what the car was doing at the time.
 
-Version 0.2.0 · iDrive 7 · package `aref_faultwatch` · [all apps and how to install](../../README.md)
+Version 0.2.1 · iDrive 7 · package `aref_faultwatch` · [all apps and how to install](../../README.md)
 
 > [!NOTE]
 > Not tested on a car yet. It reads fault memories the same way cauliflowermossgrape's Fault Scanner does
@@ -37,19 +37,19 @@ Screens rendered on a PC from the app's own drawing code with made-up data (`too
 
 ### Timeline
 
-![Timeline](screenshots/timeline.png)
+![Timeline](../../docs/screenshots/aref_faultwatch/timeline.png)
 
 Every change with its time and the drive at that moment.
 
 ### Current faults
 
-![Current faults](screenshots/current.png)
+![Current faults](../../docs/screenshots/aref_faultwatch/current.png)
 
 What the last scan found.
 
 ### Home-screen widget
 
-![Home-screen widget](screenshots/widget.png)
+![Home-screen widget](../../docs/screenshots/aref_faultwatch/widget.png)
 
 Add it to the iDrive home screen like BMW's own widgets: how many faults are stored, how many are active, and the newest change. The small size shows the same as two lines of text.
 

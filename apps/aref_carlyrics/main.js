@@ -21,7 +21,7 @@ const LyricsLib = require('./lyrics');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [

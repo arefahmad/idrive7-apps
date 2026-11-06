@@ -19,7 +19,7 @@ const { ECU } = require('./kit/ecus');
 const FW = require('./watch');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const W = 1600, H = 520;
 const MASK = 0x0D;                 // status bits asked for: test failed now (0x01), pending (0x04), confirmed (0x08)
 const FIRST_SCAN_MS = 90000;       // after the app starts: let the car's units settle after waking
