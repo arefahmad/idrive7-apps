@@ -2,10 +2,62 @@
   "id": "aref_carlyrics",
   "title": "Car Lyrics",
   "description": "Synced lyrics (LRCLIB) for whatever the car is playing: Apple Music over CarPlay, Bluetooth or USB, no Spotify needed. It reads the track from the head unit itself. Experimental: version 0.1 is also a probe, because the field that carries the CarPlay track on iDrive 7 isn't known yet; its Probe screen shows what the car reports. Read-only toward the car. Needs internet through the Store's uplink.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "vendor": "aref",
   "loggingId": "OAR1",
   "internet": true,
+  "startWidget": {
+    "comment": "Home-screen widget (kit/runtime/homewidget.js): the big size is a 384 x 256 picture main.js draws, the small size two text lines.",
+    "name": "Car Lyrics",
+    "layout": "LT_Table_OnlineApps_DriveRecorderWidget",
+    "image": "BackgroundImage1",
+    "size": [
+      384,
+      256
+    ],
+    "safe": [
+      0.09,
+      0.1
+    ],
+    "cells": {
+      "ErrorInfo": [
+        false,
+        "Bool"
+      ],
+      "background": [
+        true,
+        "Bool"
+      ],
+      "Title": [
+        "",
+        "Text"
+      ],
+      "ProgressbarVisible": [
+        false,
+        "Bool"
+      ],
+      "Progress": [
+        0,
+        "Float"
+      ],
+      "TextRecordings": [
+        "",
+        "Text"
+      ],
+      "TextCam": [
+        "",
+        "Text"
+      ],
+      "TimeElapsed": [
+        "",
+        "Text"
+      ],
+      "TimeRemaining": [
+        "",
+        "Text"
+      ]
+    }
+  },
   "signals": {
     "de.bmw.infotainment.a4a.carplay.CarPlayManager": "*",
     "de.bmw.infotainment.entertainment.mediaplayer.MediaPlayer": "*"
@@ -23,6 +75,10 @@
         [
           "BTN_PROBE",
           "Probe"
+        ],
+        [
+          "BTN_SETTINGS",
+          "Settings"
         ]
       ]
     },

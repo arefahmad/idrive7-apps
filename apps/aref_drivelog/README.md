@@ -3,7 +3,7 @@
 A record of every drive, kept by the head unit itself: distance, time moving, top speed, 0-60 mph, peak
 rpm, peak g-forces and temperatures. With a Dragy, it learns its own error and shows a Dragy-adjusted 0-60.
 
-Version 0.2.0 · iDrive 7 · package `aref_drivelog` · [all apps and how to install](../../README.md)
+Version 0.3.0 · iDrive 7 · package `aref_drivelog` · [all apps and how to install](../../README.md)
 
 > [!NOTE]
 > Not tested on a car yet. It uses the same driving signals as G's Dash and M Vitals (speed, rpm,
@@ -52,6 +52,12 @@ Each run with its Dragy time, the difference, and the adjusted time. The offset 
 ![Enter Dragy time](screenshots/enter-dragy.png)
 
 Setting the Dragy's time for a run with the bar buttons.
+
+### Home-screen widget
+
+![Home-screen widget](screenshots/widget.png)
+
+Add it to the iDrive home screen like BMW's own widgets: this drive or the last one: distance, top speed, time, and the 0-60 (Dragy-adjusted once calibrated). The small size shows the same as two lines of text.
 
 ## Views
 

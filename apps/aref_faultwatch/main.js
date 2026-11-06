@@ -17,8 +17,9 @@ const Car = require('./kit/car');
 const { Diag, parseDtcReply } = require('./kit/diag');
 const { ECU } = require('./kit/ecus');
 const FW = require('./watch');
+const HW = require('./kit/homewidget');
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const W = 1600, H = 520;
 const MASK = 0x0D;                 // status bits asked for: test failed now (0x01), pending (0x04), confirmed (0x08)
 const FIRST_SCAN_MS = 90000;       // after the app starts: let the car's units settle after waking
@@ -129,6 +130,17 @@ mgu.run({
                 if (pages > 1) cv.text('Page ' + (pg + 1) + ' of ' + pages + ' (More)', W - 40, H - 14, 16, t.dim, { align: 'right', literal: true });
                 await ui.image('MAIN_GFX', cv);
             }));
+            /* ---------- home-screen widget: how many faults, and the newest change ---------- */
+            HW.start(ctx, () => {
+                if (!state.last) return { label: 'Fault Watch', value: 'No scan yet', sub: 'Scans every ' + (settings.get('every') || 10) + ' min', small: ['Fault Watch', 'No scan yet'] };
+                const f = state.last.faults, keys = Object.keys(f), active = keys.filter((k) => f[k] & 0x01).length;
+                const e = state.events[state.events.length - 1];
+                const news = e ? (KIND[e.kind] ? KIND[e.kind][0] : e.kind) + ': ' + name(e.ecu) + ' ' + e.code : '';
+                return { label: 'Fault Watch', value: keys.length ? keys.length + ' fault' + (keys.length === 1 ? '' : 's') : 'No faults',
+                    sub: active ? active + ' active now' : keys.length ? 'none active' : 'all units clear', sub2: news,
+                    tone: active ? 'crit' : keys.length ? 'warn' : 'ok',
+                    small: [keys.length ? keys.length + ' faults, ' + active + ' active' : 'No faults', news] };
+            });
             log.info('started ' + VERSION + ' (' + state.events.length + ' events kept, ' + state.scans + ' scans so far)');
         } catch (e) {
             log.error('start: ' + (e && e.stack || e));

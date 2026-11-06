@@ -19,8 +19,9 @@ const mgu = require('./kit/mgu');
 const NP = require('./nowplaying');
 const LyricsLib = require('./lyrics');
 const http = require('./http');
+const HW = require('./kit/homewidget');
 
-const VERSION = '0.1.1';
+const VERSION = '0.2.0';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -88,64 +89,126 @@ mgu.run({
                 while (s.length > 1 && cv.textWidth(s + '...', size, opt) > w) s = s.slice(0, -1);
                 return s + '...';
             };
-            function drawSynced(cv, t, lines, pos) {
+            /*
+             * The glass look: a deep gradient in the song's own colours (picked from its title, so each song has
+             * its own), soft glows behind frosted panels, and lyrics left-aligned and bold, the current line in
+             * full white and the others faded, as Apple Music shows them.
+             */
+            const GX = 40, GW = 440, LX = 540, LW = W - LX - 60;     // the now-playing panel; the lyrics column
+            function palette(seed) {
+                let h = 0;
+                for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+                const hue = h % 360, hsl = (hh, ss, ll) => {
+                    const a = ss * Math.min(ll, 1 - ll), f = (n) => { const k = (n + hh / 30) % 12; return Math.round(255 * (ll - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+                    return [f(0), f(8), f(4), 255];
+                };
+                return { top: hsl(hue, 0.55, 0.22), bottom: hsl((hue + 40) % 360, 0.6, 0.07), glow1: hsl((hue + 330) % 360, 0.8, 0.45), glow2: hsl((hue + 60) % 360, 0.7, 0.4), art1: hsl(hue, 0.65, 0.5), art2: hsl((hue + 50) % 360, 0.7, 0.3) };
+            }
+            const A = (c, a) => [c[0], c[1], c[2], Math.round(255 * a)];
+            const WHITE = [255, 255, 255, 255];
+            function backdrop(cv, P) {
+                cv.gradientRect(0, 0, W, H, [[0, P.top], [1, P.bottom]]);
+                // soft glows (stacked translucent circles stand in for a blur)
+                [[260, 120, P.glow1], [1250, 420, P.glow2], [900, 60, P.glow1]].forEach((g) => {
+                    for (let r = 320; r > 20; r -= 15) cv.circle(g[0], g[1], r, A(g[2], 0.014));
+                });
+            }
+            function glass(cv, x, y, w, h, r) {
+                cv.roundRect(x, y, w, h, r, A(WHITE, 0.09));
+                cv.strokeRoundRect(x, y, w, h, r, 1.5, A(WHITE, 0.18));
+                cv.roundRect(x + 1, y + 1, w - 2, Math.min(60, h / 3), r, A(WHITE, 0.04));     // a sheen at the top
+            }
+            const mmss = (ms) => { const s2 = Math.max(0, Math.round(ms / 1000)); return Math.floor(s2 / 60) + ':' + String(s2 % 60).padStart(2, '0'); };
+            function nowPlaying(cv, P) {
+                glass(cv, GX, 30, GW, H - 60, 28);
+                // the "artwork": the song's colours and its initials (the car doesn't pass the artwork on)
+                const ax = GX + 30, ay = 58, as = 180;
+                cv.card(ax, ay, as, as, 18, [[0, P.art1], [1, P.art2]]);
+                const ini = cur.title.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+                cv.text(ini, ax + as / 2, ay + as / 2 + 26, 72, A(WHITE, 0.9), { font: 'bold', align: 'center', literal: true });
+                const tx = ax + as + 24, tw = GW - (tx - GX) - 24;
+                cv.text('NOW PLAYING', tx, ay + 22, 13, A(WHITE, 0.6), { font: 'bold', spacing: 1.5, literal: true });
+                const B = { font: 'bold', literal: true };
+                let size = 28;
+                while (size > 20 && cv.textWidth(cur.title, size, B) > tw) size -= 2;
+                cv.text(fit(cv, cur.title, size, tw, B), tx, ay + 64, size, WHITE, B);
+                cv.text(fit(cv, cur.artist, 20, tw, { literal: true }), tx, ay + 96, 20, A(WHITE, 0.7), { literal: true });
+                if (cur.album) cv.text(fit(cv, cur.album, 16, tw, { literal: true }), tx, ay + 122, 16, A(WHITE, 0.5), { literal: true });
+                // the progress line with times
+                const py = ay + as + 48, pw = GW - 60, pos = position();
+                cv.roundRect(GX + 30, py, pw, 6, 3, A(WHITE, 0.2));
+                if (cur.duration) cv.roundRect(GX + 30, py, Math.max(6, Math.min(1, pos / cur.duration) * pw), 6, 3, A(WHITE, 0.9));
+                cv.text(mmss(pos), GX + 30, py + 30, 15, A(WHITE, 0.6), { literal: true });
+                if (cur.duration) cv.text('-' + mmss(cur.duration - pos), GX + 30 + pw, py + 30, 15, A(WHITE, 0.6), { align: 'right', literal: true });
+                cv.text(fit(cv, 'Timing ' + (posVal !== null ? 'from the car' : 'estimated') + (offset() ? ', offset ' + (offset() > 0 ? '+' : '') + offset() + ' ms' : ''), 14, pw, { literal: true }), GX + 30, H - 56, 14, A(WHITE, 0.45), { literal: true });
+            }
+            function drawSynced(cv, lines, pos) {
                 const p = pos + LEAD_MS, i = LyricsLib.lineAt(lines, p);
                 const e = i >= 0 ? Math.max(0, Math.min(1, (p - lines[i].t) / SCROLL_MS)) : 1;
                 const sc = i >= 0 ? i - 1 + (1 - Math.pow(1 - e, 3)) : -1;
-                const top = 150, bottom = H - 20, cy = 300, LH = 56, X = 80, LW = W - 160;
-                cv.clip(0, top, W, bottom - top);
-                for (let j = Math.floor(sc) - 2; j <= Math.floor(sc) + 3; j++) {
+                const top = 30, bottom = H - 30, cy = 200, LH = 66;
+                cv.clip(LX, top, LW + 40, bottom - top);
+                for (let j = Math.floor(sc) - 2; j <= Math.floor(sc) + 5; j++) {
                     if (j < 0 || j >= lines.length) continue;
-                    const y = cy + (j - sc) * LH, a = Math.max(0, 1 - Math.abs(y - cy) / 190);
-                    if (a <= 0.03) continue;
-                    const now = j === i, opt = { font: now ? 'bold' : undefined, literal: true };
-                    let size = now ? 40 : 30;
-                    const txt = lines[j].text || '·   ·   ·';
-                    while (size > 24 && cv.textWidth(txt, size, opt) > LW) size -= 2;
-                    cv.alpha(now ? 1 : 0.3 + 0.5 * a);
-                    cv.text(fit(cv, txt, size, LW, opt), X, y + size * 0.35, size, now ? t.text : t.dim, opt);
-                    cv.alpha(1);
+                    const y = cy + (j - sc) * LH;
+                    if (y < top - 40 || y > bottom + 40) continue;
+                    const now = j === i, past = j < i, opt = { font: 'bold', literal: true };
+                    let size = now ? 44 : 38;
+                    const txt = lines[j].text || '·  ·  ·';
+                    while (size > 26 && cv.textWidth(txt, size, opt) > LW) size -= 2;
+                    const a = now ? 1 : past ? 0.22 : Math.max(0.18, 0.5 - (j - i - 1) * 0.08);
+                    cv.text(fit(cv, txt, size, LW, opt), LX, y + size * 0.35, size, A(WHITE, a), opt);
                 }
                 cv.noclip();
             }
-            function drawPlain(cv, t, text) {
-                cv.text('LYRICS (NOT SYNCED)', W - 80, 172, 16, t.dim, { font: 'bold', align: 'right', literal: true });
-                text.filter(Boolean).slice(0, 8).forEach((s, k) => cv.text(fit(cv, s, 28, W - 160), 80, 210 + k * 38, 28, k ? t.dim : t.text, { literal: true }));
+            function drawPlain(cv, text) {
+                cv.text('LYRICS (NOT SYNCED)', LX, 60, 14, A(WHITE, 0.55), { font: 'bold', spacing: 1.5, literal: true });
+                text.filter(Boolean).slice(0, 7).forEach((s, k) => cv.text(fit(cv, s, 30, LW, { font: 'bold', literal: true }), LX, 110 + k * 52, 30, A(WHITE, k ? 0.55 : 1), { font: 'bold', literal: true }));
             }
-            function center(cv, t, a, b) {
-                cv.text(a, W / 2, 290, 34, t.text, { font: 'bold', align: 'center', literal: true });
-                if (b) cv.text(fit(cv, b, 24, W - 200), W / 2, 340, 24, t.dim, { align: 'center', literal: true });
+            function message(cv, a, b) {
+                cv.text(a, LX, 230, 38, WHITE, { font: 'bold', literal: true });
+                if (b) cv.text(fit(cv, b, 22, LW), LX, 280, 22, A(WHITE, 0.65), { literal: true });
             }
             ctx.loop('MAIN', 10, guard('main', async () => {
-                const t = ctx.theme(), cv = ctx.canvas(W, H).clear(t.bg);
+                const cv = ctx.canvas(W, H);
+                if (!cur) follow();
                 if (!cur) {
-                    follow();
-                }
-                if (!cur) {
-                    center(cv, t, 'Play a song on your phone', 'Looking for the track in the car\'s data. If nothing shows up, open Probe and send a photo of it.');
+                    const P = palette('Car Lyrics');
+                    backdrop(cv, P);
+                    glass(cv, 300, 140, W - 600, 240, 28);
+                    cv.text('Play a song on your phone', W / 2, 240, 38, WHITE, { font: 'bold', align: 'center', literal: true });
+                    cv.text('Looking for the track in the car\'s data. If nothing shows up, open Probe and send a photo of it.', W / 2, 290, 20, A(WHITE, 0.65), { align: 'center', literal: true });
                 } else {
-                    cv.text(fit(cv, cur.title, 40, W - 520, { font: 'bold', literal: true }), 80, 64, 40, t.text, { font: 'bold', literal: true });
-                    cv.text(fit(cv, cur.artist + (cur.album ? '  ·  ' + cur.album : ''), 26, W - 520), 80, 104, 26, t.dim, { literal: true });
-                    cv.text('Timing: ' + timing(), W - 80, 64, 18, t.dim, { align: 'right', literal: true });
-                    if (offset()) cv.text('Offset ' + (offset() > 0 ? '+' : '') + offset() + ' ms', W - 80, 92, 18, t.dim, { align: 'right', literal: true });
-                    cv.fillRect(80, 124, W - 160, 2, t.track || '#222');
-                    if (cur.duration) cv.fillRect(80, 124, Math.max(0, Math.min(1, position() / cur.duration)) * (W - 160), 2, t.accent);
+                    const P = palette(cur.title + cur.artist);
+                    backdrop(cv, P);
+                    nowPlaying(cv, P);
                     const lyr = lyrics.get({ title: cur.title, artist: cur.artist, album: cur.album, duration: cur.duration });
-                    if (lyr.state === 'synced') drawSynced(cv, t, lyr.lines, position());
-                    else if (lyr.state === 'plain') drawPlain(cv, t, lyr.text);
-                    else if (lyr.state === 'loading') center(cv, t, 'Finding the lyrics...', '');
-                    else if (lyr.state === 'instrumental') center(cv, t, 'Instrumental', '');
-                    else if (lyr.state === 'error') center(cv, t, 'Can\'t reach LRCLIB', net.online() ? 'Trying again in a moment.' : 'The car is offline: Store > Settings > Wi-Fi, or a phone hotspot.');
-                    else if (lyr.state === 'undrawable') center(cv, t, 'Lyrics in letters this app can\'t draw yet', '');
-                    else center(cv, t, 'No lyrics found for this song', 'LRCLIB has no entry for this title and artist.');
+                    if (lyr.state === 'synced') drawSynced(cv, lyr.lines, position());
+                    else if (lyr.state === 'plain') drawPlain(cv, lyr.text);
+                    else if (lyr.state === 'loading') message(cv, 'Finding the lyrics...', '');
+                    else if (lyr.state === 'instrumental') message(cv, 'Instrumental', 'Nothing to sing along to.');
+                    else if (lyr.state === 'error') message(cv, 'Can\'t reach LRCLIB', net.online() ? 'Trying again in a moment.' : 'The car is offline: Store > Settings > Wi-Fi, or a phone hotspot.');
+                    else if (lyr.state === 'undrawable') message(cv, 'Lyrics in letters this app can\'t draw yet', '');
+                    else message(cv, 'No lyrics for this song', 'LRCLIB has no entry for this title and artist.');
                 }
                 if (toast && Date.now() < toast.until) {
-                    const w = cv.textWidth(toast.text, 24, { literal: true }) + 60;
-                    cv.roundRect((W - w) / 2, H - 70, w, 50, 25, '#2a2b31');
-                    cv.text(toast.text, W / 2, H - 37, 24, '#ffffff', { align: 'center', literal: true });
+                    const w = cv.textWidth(toast.text, 22, { literal: true }) + 60;
+                    cv.roundRect((W - w) / 2, H - 70, w, 48, 24, A([20, 20, 24], 0.85));
+                    cv.strokeRoundRect((W - w) / 2, H - 70, w, 48, 24, 1, A(WHITE, 0.2));
+                    cv.text(toast.text, W / 2, H - 39, 22, WHITE, { align: 'center', literal: true });
                 }
                 await ui.image('MAIN_GFX', cv);
             }));
+
+            /* ---------- home-screen widget: the song and the line playing ---------- */
+            HW.start(ctx, () => {
+                if (!cur) return { label: 'Car Lyrics', value: 'Nothing playing', sub: 'Play a song on your phone', small: ['Car Lyrics', 'Nothing playing'] };
+                const lyr = lyrics.get({ title: cur.title, artist: cur.artist, album: cur.album, duration: cur.duration });
+                let line = '';
+                if (lyr.state === 'synced') { const i = LyricsLib.lineAt(lyr.lines, position() + LEAD_MS); line = i >= 0 ? lyr.lines[i].text : ''; }
+                return { label: 'Now playing', value: cur.title, sub: line || cur.artist, sub2: line ? cur.artist : '',
+                    bar: cur.duration ? position() / cur.duration : null, small: [cur.title, line || cur.artist] };
+            }, { fps: 1 });
 
             /* ---------- PROBE: everything the car reports ---------- */
             let page = 0;

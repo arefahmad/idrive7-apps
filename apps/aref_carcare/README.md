@@ -3,7 +3,7 @@
 Your own service intervals, tracked by the car's odometer and kept separate from BMW's Condition Based
 Service (CBS) reminders.
 
-Version 0.1.0 · iDrive 7 · package `aref_carcare` · [all apps and how to install](../../README.md)
+Version 0.2.0 · iDrive 7 · package `aref_carcare` · [all apps and how to install](../../README.md)
 
 > [!NOTE]
 > Not tested on a car yet. The odometer comes from the same instrument-cluster signal that
@@ -50,6 +50,12 @@ Each item, the interval used, and what is left. Due soon in amber, overdue in re
 ![Done earlier](screenshots/done-earlier.png)
 
 Recording a service from before the app: miles and months ago.
+
+### Home-screen widget
+
+![Home-screen widget](screenshots/widget.png)
+
+Add it to the iDrive home screen like BMW's own widgets: the item closest to due, with what is left and a bar. The small size shows the same as two lines of text.
 
 ## What it doesn't do
 

@@ -17,6 +17,12 @@ codes, clears or controls anything.
 | <img src="apps/aref_faultwatch/icon.png" width="40" alt=""> | **[Fault Watch](apps/aref_faultwatch/README.md)** | Background fault-memory scans and a timeline of what changed, each with the speed, gear, rpm and temperature at the time. For tracking down intermittent faults. |
 | <img src="apps/aref_carlyrics/icon.png" width="40" alt=""> | **[Car Lyrics](apps/aref_carlyrics/README.md)** | Synced lyrics for Apple Music over CarPlay, Bluetooth or USB, no Spotify needed. Experimental. |
 
+## Common to every app
+
+- **Home-screen widget:** each app has one, added to the iDrive home screen like BMW's own widgets.
+- **Settings** in BMW's own style: the Settings button opens a BMW-style list over the app with the GPU
+  renderer, or the HMI's own settings screen without it.
+
 ## Status
 
 > [!NOTE]

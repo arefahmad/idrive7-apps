@@ -2,19 +2,83 @@
   "id": "aref_faultwatch",
   "title": "Fault Watch",
   "description": "Reads every control unit's fault memory in the background every few minutes while the car is on, and keeps a timeline of what changed: new faults, faults that turn active, faults that clear. Each entry has the time and the drive at that moment (speed, gear, rpm, oil, drive mode), so an intermittent fault can be matched to when it happened. Read-only: it never clears or writes anything. Starts with the car.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "vendor": "aref",
   "loggingId": "OAR2",
   "mguAppStartType": "autostart",
+  "startWidget": {
+    "comment": "Home-screen widget (kit/runtime/homewidget.js): the big size is a 384 x 256 picture main.js draws, the small size two text lines.",
+    "name": "Fault Watch",
+    "layout": "LT_Table_OnlineApps_DriveRecorderWidget",
+    "image": "BackgroundImage1",
+    "size": [
+      384,
+      256
+    ],
+    "safe": [
+      0.09,
+      0.1
+    ],
+    "cells": {
+      "ErrorInfo": [
+        false,
+        "Bool"
+      ],
+      "background": [
+        true,
+        "Bool"
+      ],
+      "Title": [
+        "",
+        "Text"
+      ],
+      "ProgressbarVisible": [
+        false,
+        "Bool"
+      ],
+      "Progress": [
+        0,
+        "Float"
+      ],
+      "TextRecordings": [
+        "",
+        "Text"
+      ],
+      "TextCam": [
+        "",
+        "Text"
+      ],
+      "TimeElapsed": [
+        "",
+        "Text"
+      ],
+      "TimeRemaining": [
+        "",
+        "Text"
+      ]
+    }
+  },
   "signals": {
     "com.harman.infotainment.systemfunctions.tasu.tasu.InternalTasu": {
       "_instances": "SystemFunctionsInternalTasuInst1",
-      "_methods": ["sendTasuRequest"],
-      "_broadcasts": ["sendTasuResponse"]
+      "_methods": [
+        "sendTasuRequest"
+      ],
+      "_broadcasts": [
+        "sendTasuResponse"
+      ]
     },
-    "de.bmw.infotainment.vehicle.CDS": {"statusEngineSpeed2": "rs", "statusEngineTemperature": "rs"},
-    "de.bmw.infotainment.vehicle.Vehicle2": {"statusCarSpeed2": "rs"},
-    "de.bmw.infrastructure.VehicleInformation": {"statusGearboxDrive": "s", "DataPowerTrain2": "s"},
+    "de.bmw.infotainment.vehicle.CDS": {
+      "statusEngineSpeed2": "rs",
+      "statusEngineTemperature": "rs"
+    },
+    "de.bmw.infotainment.vehicle.Vehicle2": {
+      "statusCarSpeed2": "rs"
+    },
+    "de.bmw.infrastructure.VehicleInformation": {
+      "statusGearboxDrive": "s",
+      "DataPowerTrain2": "s"
+    },
     "de.bmw.infotainment.drivingexcitement.FES": {
       "_optional": "the drive mode in each entry's context",
       "statusFESVehicleDynamicSwitchHMI": "rs"
@@ -26,16 +90,78 @@
       "kind": "canvas",
       "title": "Fault Watch",
       "buttons": [
-        ["BTN_SCAN", "Scan now"],
-        ["BTN_VIEW", "Current faults"],
-        ["BTN_MORE", "More"]
+        [
+          "BTN_SCAN",
+          "Scan now"
+        ],
+        [
+          "BTN_VIEW",
+          "Current faults"
+        ],
+        [
+          "BTN_MORE",
+          "More"
+        ],
+        [
+          "BTN_SETTINGS",
+          "Settings"
+        ]
       ]
     }
   ],
   "settings": [
-    {"key": "theme", "label": "Colours", "type": "choice", "default": "m_tricolour",
-     "options": [["m_red", "M Red"], ["m_tricolour", "M Tricolour"], ["ice", "Ice White"], ["amber", "Night Amber"]]},
-    {"key": "every", "label": "Scan every", "type": "number", "unit": "min", "default": 10, "steps": [5, 10, 15, 30]},
-    {"key": "units", "label": "Units", "type": "choice", "default": "us", "options": [["us", "mph, F"], ["metric", "km/h, C"]]}
+    {
+      "key": "theme",
+      "label": "Colours",
+      "type": "choice",
+      "default": "m_tricolour",
+      "options": [
+        [
+          "m_red",
+          "M Red"
+        ],
+        [
+          "m_tricolour",
+          "M Tricolour"
+        ],
+        [
+          "ice",
+          "Ice White"
+        ],
+        [
+          "amber",
+          "Night Amber"
+        ]
+      ]
+    },
+    {
+      "key": "every",
+      "label": "Scan every",
+      "type": "number",
+      "unit": "min",
+      "default": 10,
+      "steps": [
+        5,
+        10,
+        15,
+        30
+      ]
+    },
+    {
+      "key": "units",
+      "label": "Units",
+      "type": "choice",
+      "default": "us",
+      "options": [
+        [
+          "us",
+          "mph, F"
+        ],
+        [
+          "metric",
+          "km/h, C"
+        ]
+      ]
+    }
   ]
 }

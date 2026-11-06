@@ -19,14 +19,15 @@ const mgu = require('./kit/mgu');
 const Car = require('./kit/car');
 const { Trips, csv } = require('./trip');
 const { DragyCal, READY_N } = require('./dragy');
+const HW = require('./kit/homewidget');
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 const W = 1600, H = 520;
 const SAVE_MS = 30000;
 const ROWS = 7;
 const VIEWS = ['drive', 'history', 'runs'];
 const VIEW_NAME = { drive: 'This drive', history: 'History', runs: '0-60 runs' };
-const NORMAL = ['BTN_VIEW', 'BTN_DRAGY', 'BTN_EXPORT', 'BTN_MORE'];
+const NORMAL = ['BTN_VIEW', 'BTN_DRAGY', 'BTN_EXPORT', 'BTN_MORE', 'BTN_SETTINGS'];
 const ENTRY = ['BTN_UP', 'BTN_DOWN', 'BTN_UP2', 'BTN_DOWN2', 'BTN_SAVE', 'BTN_SKIP'];
 
 mgu.run({
@@ -195,6 +196,16 @@ mgu.run({
                 }
                 await ui.image('MAIN_GFX', cv);
             }));
+            /* ---------- home-screen widget: this drive, or the last one ---------- */
+            HW.start(ctx, () => {
+                const c = tr.current || tr.trips[tr.trips.length - 1];
+                if (!c) return { label: 'Drive Log', value: 'No drives yet', sub: 'Records each drive by itself', small: ['Drive Log', 'No drives yet'] };
+                const b = c.best060, adj = cal.adjusted(b);
+                const run = b === null ? '' : '0-60 ' + (adj !== null ? secs(adj) + ' (Dragy-adj.)' : secs(b));
+                return { label: tr.current ? 'This drive' : 'Last drive', value: dist(c.km),
+                    sub: 'top ' + spd(c.topKmh) + '   ' + dur(c.movingMs), sub2: run || ('oil max ' + temp(c.oilMax)),
+                    small: [(tr.current ? 'This drive: ' : 'Last drive: ') + dist(c.km), run || 'top ' + spd(c.topKmh)] };
+            });
             log.info('started ' + VERSION + ' (' + tr.trips.length + ' drives, ' + cal.runs.length + ' runs kept)');
         } catch (e) {
             log.error('start: ' + (e && e.stack || e));

@@ -3,7 +3,7 @@
 Synced lyrics for whatever the car is playing: Apple Music over CarPlay, Bluetooth or USB. No Spotify
 account and no app on the phone.
 
-Version 0.1.1 · iDrive 7 · package `aref_carlyrics` · [all apps and how to install](../../README.md)
+Version 0.2.0 · iDrive 7 · package `aref_carlyrics` · [all apps and how to install](../../README.md)
 
 > [!WARNING]
 > **Experimental.** Which interface and field carry the CarPlay track on iDrive 7 isn't documented. This
@@ -19,8 +19,9 @@ from CarPlay and Bluetooth to show them in its own media screens.
 
 ## What it does
 
-- **Main screen:** the song, the artist and album, a progress line, and the lyrics: the current line large,
-  the ones around it fading.
+- **Main screen:** a glass design in the song's own colours: a frosted now-playing panel (title, artist,
+  album, progress and times) and the lyrics beside it, bold and left-aligned, the current line in full
+  white and the others faded, as Apple Music shows them.
 - **Lyrics:** from [LRCLIB](https://lrclib.net), a free, open database of synced lyrics. Needs internet
   through the Store's uplink (Wi-Fi or a phone hotspot).
 - **Song just started:** when the car doesn't report the playback position, the app times the song from
@@ -35,13 +36,19 @@ Screens rendered on a PC from the app's own drawing code with made-up data (`too
 
 ![Lyrics](screenshots/lyrics.png)
 
-The current line large, the ones around it fading. The song and lyrics here are made up.
+The glass design: each song gets its own colours. The song and lyrics here are made up.
 
 ### Probe
 
 ![Probe](screenshots/probe.png)
 
 Every value the car sends from the CarPlay and media interfaces.
+
+### Home-screen widget
+
+![Home-screen widget](screenshots/widget.png)
+
+Add it to the iDrive home screen like BMW's own widgets: the song and the lyric line playing, with a progress bar. The small size shows the same as two lines of text.
 
 ## The probe
 

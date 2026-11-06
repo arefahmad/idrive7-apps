@@ -58,6 +58,7 @@ function harness(id, opts) {
     (spec.settings || []).forEach((s) => { values[s.key] = s.default; });
     Object.assign(values, opts.settings || {});
     const clicks = {}, loops = {}, images = {}, layout = [];
+    let widgetFn = null;
     const ctx = {
         spec, dataDir, display: null,
         log: { info() {}, warn() {}, error(m) { console.error(id + ': ' + m); }, debug() {} },
@@ -67,6 +68,7 @@ function harness(id, opts) {
         onLayout: (fn) => layout.push(fn),
         signals: opts.signals || { watch: () => Promise.resolve({ available: false, error: 'PC' }), loadConfig: () => { throw new Error('PC'); } },
         loop: (name, fps, fn) => { loops[name] = fn; return { stop() {}, kick() {} }; },
+        widget: { loop: (fps, fn) => { widgetFn = fn; }, set() {}, onChange() {}, active: () => true },
         ui: {
             onClick: (b, fn) => { clicks[b] = fn; }, text() { return Promise.resolve(); }, visible() { return Promise.resolve(); },
             open() { return Promise.resolve(); }, isVisible: () => true,
@@ -80,6 +82,13 @@ function harness(id, opts) {
     return {
         ctx, clicks,
         ready: () => Promise.resolve(ctx.started).then(() => new Promise((r) => setTimeout(r, 50))),
+        async widget(file) {
+            const cv = await widgetFn({ spawnId: 1, big: true, visible: true });
+            const out = path.join(appDir, 'screenshots');
+            fs.mkdirSync(out, { recursive: true });
+            fs.writeFileSync(path.join(out, file), cv.png(9));
+            console.log('wrote apps/' + id + '/screenshots/' + file);
+        },
         async shot(screen, file) {
             await loops[screen]();
             const rec = images[screen + '_GFX'], cv = new Canvas(rec.w, rec.h);
@@ -120,6 +129,7 @@ async function carCare() {
     });
     await h.ready();
     await h.shot('MAIN', 'items.png');
+    await h.widget('widget.png');
     h.clicks.BTN_EARLIER();
     for (let i = 0; i < 2; i++) h.clicks.BTN_KM_UP();
     h.clicks.BTN_KM_UP2(); h.clicks.BTN_MO_UP(); h.clicks.BTN_MO_UP();
@@ -144,6 +154,7 @@ async function driveLog() {
     let h = harness('aref_drivelog', { files, settings: { dragy: true } });
     await h.ready();
     await h.shot('MAIN', 'this-drive.png');
+    await h.widget('widget.png');
     h.clicks.BTN_VIEW(); await h.shot('MAIN', 'history.png');
     h.clicks.BTN_VIEW(); await h.shot('MAIN', 'runs.png');
     h.clicks.BTN_DRAGY(); h.clicks.BTN_UP(); h.clicks.BTN_UP(); h.clicks.BTN_UP2();
@@ -170,6 +181,7 @@ async function faultWatch() {
     const h = harness('aref_faultwatch', { files: { 'faultwatch.json': { last, events, scans: 412 } } });
     await h.ready();
     await h.shot('MAIN', 'timeline.png');
+    await h.widget('widget.png');
     h.clicks.BTN_VIEW(); await h.shot('MAIN', 'current.png');
     delete stubs['./kit/car']; delete stubs['./kit/diag'];
 }
@@ -192,6 +204,7 @@ async function carLyrics() {
     await new Promise((r) => setTimeout(r, 50));
     await h.shot('MAIN', 'lyrics.png');
     await h.shot('PROBE', 'probe.png');
+    await h.widget('widget.png');
     delete stubs['./http'];
 }
 

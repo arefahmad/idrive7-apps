@@ -2,10 +2,62 @@
   "id": "aref_drivelog",
   "title": "Drive Log",
   "description": "Records every drive in the background: distance, time moving, top speed, best 0-60 mph, peak rpm, the most acceleration, braking and cornering g, and the highest oil and coolant temperatures. Compare with Dragy (off by default): enter a Dragy's time after a run, and after 3 runs every 0-60 also shows a Dragy-adjusted time. History, 0-60 runs and Save CSV. Read-only. Starts with the car.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "vendor": "aref",
   "loggingId": "OAR3",
   "mguAppStartType": "autostart",
+  "startWidget": {
+    "comment": "Home-screen widget (kit/runtime/homewidget.js): the big size is a 384 x 256 picture main.js draws, the small size two text lines.",
+    "name": "Drive Log",
+    "layout": "LT_Table_OnlineApps_DriveRecorderWidget",
+    "image": "BackgroundImage1",
+    "size": [
+      384,
+      256
+    ],
+    "safe": [
+      0.09,
+      0.1
+    ],
+    "cells": {
+      "ErrorInfo": [
+        false,
+        "Bool"
+      ],
+      "background": [
+        true,
+        "Bool"
+      ],
+      "Title": [
+        "",
+        "Text"
+      ],
+      "ProgressbarVisible": [
+        false,
+        "Bool"
+      ],
+      "Progress": [
+        0,
+        "Float"
+      ],
+      "TextRecordings": [
+        "",
+        "Text"
+      ],
+      "TextCam": [
+        "",
+        "Text"
+      ],
+      "TimeElapsed": [
+        "",
+        "Text"
+      ],
+      "TimeRemaining": [
+        "",
+        "Text"
+      ]
+    }
+  },
   "signals": {
     "de.bmw.infotainment.vehicle.CDS": {
       "statusEngineSpeed2": "rs",
@@ -68,6 +120,10 @@
         [
           "BTN_SKIP",
           "No Dragy time"
+        ],
+        [
+          "BTN_SETTINGS",
+          "Settings"
         ]
       ]
     }

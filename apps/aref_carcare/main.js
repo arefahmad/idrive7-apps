@@ -15,12 +15,13 @@ const fs = require('fs');
 const path = require('path');
 const mgu = require('./kit/mgu');
 const C = require('./items');
+const HW = require('./kit/homewidget');
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const W = 1600, H = 520;
 const ROWS = 7;
 const KOMBI = 'de.bmw.infotainment.KombiIF';
-const NORMAL = ['BTN_NEXT', 'BTN_DONE', 'BTN_EARLIER'];
+const NORMAL = ['BTN_NEXT', 'BTN_DONE', 'BTN_EARLIER', 'BTN_SETTINGS'];
 const ENTRY_MI = ['BTN_KM_UP', 'BTN_KM_UP2', 'BTN_KM_DOWN2', 'BTN_KM_DOWN'];
 const ENTRY_MO = ['BTN_MO_UP', 'BTN_MO_DOWN'];
 const ENTRY = ENTRY_MI.concat(ENTRY_MO, ['BTN_SAVE', 'BTN_CANCEL']);
@@ -158,6 +159,21 @@ mgu.run({
                 }
                 await ui.image('MAIN_GFX', cv);
             }));
+            /* ---------- home-screen widget: the item closest to due ---------- */
+            HW.start(ctx, () => {
+                const iv = intervals(), now = Date.now();
+                let best = null;
+                C.ITEMS.forEach((it) => {
+                    const r = C.status(it, data.recs[it.key], data.odo, now, C.intervalOf(it, iv));
+                    if (r.known && (!best || r.frac > best.r.frac)) best = { it, r };
+                });
+                if (!best) return { label: 'Car Care', value: 'Set up', sub: 'Record your last services', small: ['Car Care', 'Record your last services'] };
+                const left = C.leftText(best.r, settings.get('units')).split('; ')[0];
+                const tone = best.r.due ? 'crit' : best.r.soon ? 'warn' : 'ok';
+                const m = /^([\d,]+ (?:mi|km|months|days)) (left|over)$/.exec(left);
+                return { label: best.it.name, value: m ? m[1] : left, sub: m ? (m[2] === 'over' ? 'overdue' : 'left') : '', bar: best.r.frac, tone,
+                    small: [best.it.name, left] };
+            });
             log.info('started ' + VERSION + ' (odometer last seen ' + data.odo + ' km)');
         } catch (e) {
             log.error('start: ' + (e && e.stack || e));

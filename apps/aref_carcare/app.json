@@ -2,9 +2,61 @@
   "id": "aref_carcare",
   "title": "Car Care",
   "description": "Your own service intervals, apart from BMW's: engine oil (3,000 mi by default), spark plugs, coils, diff, transfer case and transmission fluid, brake fluid, air and cabin filters, each with how much is left. Done today records the odometer and the date; Done earlier sets a service from before. It never resets BMW's own service reminders, so a dealer's free service still comes due on BMW's schedule. Read-only toward the car.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "vendor": "aref",
   "loggingId": "OAR4",
+  "startWidget": {
+    "comment": "Home-screen widget (kit/runtime/homewidget.js): the big size is a 384 x 256 picture main.js draws, the small size two text lines.",
+    "name": "Car Care",
+    "layout": "LT_Table_OnlineApps_DriveRecorderWidget",
+    "image": "BackgroundImage1",
+    "size": [
+      384,
+      256
+    ],
+    "safe": [
+      0.09,
+      0.1
+    ],
+    "cells": {
+      "ErrorInfo": [
+        false,
+        "Bool"
+      ],
+      "background": [
+        true,
+        "Bool"
+      ],
+      "Title": [
+        "",
+        "Text"
+      ],
+      "ProgressbarVisible": [
+        false,
+        "Bool"
+      ],
+      "Progress": [
+        0,
+        "Float"
+      ],
+      "TextRecordings": [
+        "",
+        "Text"
+      ],
+      "TextCam": [
+        "",
+        "Text"
+      ],
+      "TimeElapsed": [
+        "",
+        "Text"
+      ],
+      "TimeRemaining": [
+        "",
+        "Text"
+      ]
+    }
+  },
   "signals": {
     "de.bmw.infotainment.KombiIF": {
       "_optional": "the odometer (statusRangeTankStatus.mileageKilometre); without it only time-based items count",
@@ -60,6 +112,10 @@
         [
           "BTN_CANCEL",
           "Cancel"
+        ],
+        [
+          "BTN_SETTINGS",
+          "Settings"
         ]
       ]
     }
