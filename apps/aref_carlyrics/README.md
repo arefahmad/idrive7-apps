@@ -3,7 +3,7 @@
 Synced lyrics for whatever the car is playing: Apple Music over CarPlay, Bluetooth or USB. No Spotify
 account and no app on the phone.
 
-Version 0.3.0 · iDrive 7 · package `aref_carlyrics` · [all apps and how to install](../../README.md)
+Version 0.3.1 · iDrive 7 · package `aref_carlyrics` · [all apps and how to install](../../README.md)
 
 ## Who it's for
 
@@ -14,10 +14,12 @@ time in the song from CarPlay to show them in its own media screens.
 
 ## What it does
 
-- **Full screen, Apple Music style:** the album art blurred behind the whole page and drifting slowly,
-  the cover with the title, artist and a progress line on the left, and the lyrics on the right: big and
-  bold, the line being sung bright and the others faded, gliding up line by line. Instrumental breaks
-  show three dots that fill up until the next line.
+- **Full screen, drawn like Apple Music on a Mac:** two blurred layers of the album art flowing behind
+  the page, the cover with the title, artist and a progress line centred on the left, and the lyrics on
+  the right in big bold type (Inter Display, the open look-alike of Apple's SF Pro). The line being sung
+  is full white; the lines to come show at 40 % and the ones sung at 25 %, softly blurred, more the
+  further they are. The lyrics glide up line by line, and instrumental breaks show three dots that fill
+  up until the next line.
 - **Timing from the car:** CarPlay sends the time in the song about once a second. The app runs its own
   clock between those updates, so the lyrics move smoothly, and it stops when you pause. Skips, seeks
   and new songs are picked up on their own.
@@ -78,4 +80,6 @@ draws only on the centre screen.
 
 The lyrics client (`stage/lyrics.js`) and the artwork resampling are from nickgcode's G's Music (MIT).
 The JPEG decoder (`vendor/jpeg_decoder.js`) is jpeg-js (BSD-3-Clause) with pdf.js's decoder core
-(Apache 2.0), as vendored in G's Music. See `LICENSE`.
+(Apache 2.0), as vendored in G's Music. The fonts in `data/fonts/` are baked from
+[Inter](https://github.com/rsms/inter) (SIL Open Font License 1.1, `data/fonts/LICENSE-Inter.txt`) by
+`tools/bake_fonts.py`. See `LICENSE`.

@@ -27,13 +27,15 @@ const mgu = require('./kit/mgu');
 const G = require('./kit/gauges');
 const FS = require('./kit/fullscreen');
 const record = require('./kit/record');
+const fonts = require('./kit/fonts');
+const pack = require('./kit/pack');
 const NP = require('./nowplaying');
 const LyricsLib = require('./lyrics');
 const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -43,7 +45,7 @@ const IFACES = [
     { iface: 'de.bmw.infotainment.hmi.hmimediastate.HmiMediaState', instances: [] },
     { iface: 'de.bmw.infotainment.entertainment.dynamicmediaplayer.DynamicMediaPlayer', instances: [] },
 ];
-const ART_ID = 41, BG_ID = 42;    // pixel picture ids (record.setImage)
+const ART_ID = 41, BG_ID = 42, BG2_ID = 43;    // pixel picture ids (record.setImage)
 const FRAME_MS = 1000 / 30;       // the animation clock's step: at most 30 different frames a second
 const LEAD_MS = 250;              // a line lights up this much before its time (reading takes a moment)
 const GLIDE_MS = 620;             // the lyrics glide to the next line over this long
@@ -53,7 +55,11 @@ const NUDGE = 0.3;                // share of the gap to a new time from the car
 const SNAP_MS = 1500;             // a gap bigger than this (a seek, a skip back) is jumped, not glided
 const HOLD_MS = 4000;             // the clock runs at most this far past the car's last time
 const REPORT_MS = 60000;          // carlyrics-probe.txt is written again this often (when anything changed)
-const LYR = { size: 44, lh: 54, gap: 30, max: 3 };   // lyric text size, line height, gap between lines, wrapped lines at most
+// the lyrics as Apple Music on a Mac draws them: big bold text, wrapped; the line being sung full white,
+// the ones to come at 40 %, the ones sung at 25 %, both softly blurred, more the further they are
+const LYR = { size: 50, lh: 60, gap: 24, max: 4 };   // text size, line height, gap between lines, wrapped lines at most
+const NEXT_A = 0.4, PAST_A = 0.25;                  // brightness of the lines to come and of the lines sung
+const BLUR_PX = 1.2, BLUR_MAX = 3.6;                // blur radius per line away from the one being sung, and at most
 
 const WHITE = '#ffffff';
 const easeOut = (e) => 1 - Math.pow(1 - Math.max(0, Math.min(1, e)), 3);
@@ -104,6 +110,15 @@ mgu.run({
             const lyrics = new LyricsLib.Lyrics(request, log, 'CarLyrics/' + VERSION + ' (iDrive 7 head-unit app; ' + HOMEPAGE + ')');
             const artwork = new ART.Artwork(request, log);
             const np = new NP.NowPlaying(ctx.signals, log, IFACES);
+            // Inter (OFL), the open look-alike of Apple's SF Pro: data/fonts/, baked by tools/bake_fonts.py
+            let F_BOLD = 'bold', F_MED = 'label';
+            try {
+                const dirs = [path.join(__dirname, 'fonts'), path.join(__dirname, 'data', 'fonts')];
+                const src = pack.open(fs.existsSync(dirs[0] + '.pack') || fs.existsSync(dirs[0]) ? dirs[0] : dirs[1]);
+                if (fonts.register('cl_bold', src.json('cl_bold.json'))) F_BOLD = 'cl_bold';
+                if (fonts.register('cl_med', src.json('cl_med.json'))) F_MED = 'cl_med';
+            } catch (e) { log.warn('fonts: ' + e.message); }
+            log.info('fonts: ' + F_BOLD + ', ' + F_MED);
             let catalog = { error: 'not read yet', hits: [] };
             let toast = null;
             const say = (text, ms) => { toast = { text: text, until: Date.now() + (ms || 3000) }; };
@@ -151,6 +166,7 @@ mgu.run({
                 if (a.ver !== artShown) {
                     record.setImage(ART_ID, ART.ART_PX, ART.ART_PX, a.cover);
                     record.setImage(BG_ID, ART.BG_W, ART.BG_H, a.blur);
+                    record.setImage(BG2_ID, ART.BG_W, ART.BG_H, a.blur2);
                     artShown = a.ver;
                 }
                 return a;
@@ -161,21 +177,28 @@ mgu.run({
             let probe = false;                        // the Probe tab
             if (ctx.onTab) ctx.onTab(guard('tab', (i) => { probe = i === 1; page = 0; vpage = 0; showButtons(); }));
 
-            /** The layout in the safe area A: the cover column on the left, the lyrics to its right. */
+            /** The layout in the safe area A: the cover centred in the left half, the lyrics in the right half. */
             function geo(A) {
-                const S = Math.round(Math.max(240, Math.min(400, A.h - 138)));
-                const colH = S + 138, x0 = A.x + 36, y0 = A.y + Math.max(0, Math.round((A.h - colH) / 2));
-                const LX = x0 + S + 84;
-                return { A: A, S: S, x0: x0, y0: y0, LX: LX, LW: A.right - 40 - LX };
+                const S = Math.round(Math.max(240, Math.min(420, A.h - 150)));
+                const half = A.x + Math.round(A.w * 0.46);
+                const colH = S + 150, x0 = A.x + Math.round((half - A.x - S) / 2), y0 = A.y + Math.max(0, Math.round((A.h - colH) / 2));
+                const LX = half + 20;
+                return { A: A, S: S, x0: x0, y0: y0, LX: LX, LW: A.right - 56 - LX };
             }
 
             /** The blurred artwork behind everything (or the song's colours), drifting slowly while it plays. */
             function backdrop(cv, a, now, P, fullH) {
                 if (a) {
+                    // two blurred layers of the cover drifting past each other, slowly, as Apple Music's background flows
                     const d = cur && cur.playing ? now / 1000 : 0;
-                    const sc = 1.18, bw = W * sc, bh = fullH * sc;
-                    const dx = Math.sin(d / 11) * 0.06 * W, dy = Math.cos(d / 13) * 0.05 * fullH;
-                    cv.image(BG_ID, (W - bw) / 2 + dx, (fullH - bh) / 2 + dy, bw, bh);
+                    const layer = (id, sc, fx, fy, ph) => {
+                        const bw = W * sc, bh = fullH * sc;
+                        cv.image(id, (W - bw) / 2 + Math.sin(d / fx + ph) * 0.07 * W, (fullH - bh) / 2 + Math.cos(d / fy + ph) * 0.07 * fullH, bw, bh);
+                    };
+                    layer(BG_ID, 1.25, 9, 11, 0);
+                    cv.alpha(0.5);
+                    layer(BG2_ID, 1.45, 13, 7, 2);
+                    cv.alpha(1);
                 } else {
                     cv.gradientRect(0, 0, W, fullH, [[0, P.top], [1, P.bottom]]);
                     for (let r = 340; r > 20; r -= 16) cv.circle(300, 120, r, G.withAlpha(P.glow, 0.016));
@@ -193,29 +216,29 @@ mgu.run({
                 else {
                     cv.card(x, y, s, s, r, [[0, P.art1], [1, P.art2]]);
                     const ini = LyricsLib.fold(cur.title).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
-                    cv.text(ini, x + s / 2, y + s / 2 + s * 0.13, Math.round(s * 0.36), G.withAlpha(WHITE, 0.92), { font: 'bold', align: 'center', literal: true });
+                    cv.text(ini, x + s / 2, y + s / 2 + s * 0.13, Math.round(s * 0.36), G.withAlpha(WHITE, 0.92), { font: F_BOLD, align: 'center', literal: true });
                 }
-                const B = { font: 'bold', literal: true };
-                let ty = y + s + 42, size = 30;
+                const B = { font: F_BOLD, literal: true }, M = { font: F_MED, literal: true };
+                let ty = y + s + 46, size = 30;
                 while (size > 22 && cv.textWidth(LyricsLib.fold(cur.title), size, B) > s) size -= 2;
                 cv.text(fit(cv, cur.title, size, s, B), x, ty, size, WHITE, B);
                 ty += 32;
                 const by = [cur.artist, cur.album].filter(Boolean).join('  ·  ');
-                cv.text(fit(cv, by, 21, s), x, ty, 21, G.withAlpha(WHITE, 0.66), { literal: true });
+                cv.text(fit(cv, by, 22, s, M), x, ty, 22, G.withAlpha(WHITE, 0.62), M);
                 // the progress line, and the times under it
-                const py = ty + 26, pos = Math.max(0, position(now) - offset()), dur = cur.duration || 0;
-                cv.roundRect(x, py, s, 5, 2.5, G.withAlpha(WHITE, 0.22));
-                if (dur) cv.roundRect(x, py, Math.max(5, Math.min(1, pos / dur) * s), 5, 2.5, G.withAlpha(WHITE, 0.92));
-                cv.text(mmss(pos), x, py + 28, 15, G.withAlpha(WHITE, 0.6), { literal: true });
-                if (dur) cv.text('-' + mmss(dur - pos), x + s, py + 28, 15, G.withAlpha(WHITE, 0.6), { align: 'right', literal: true });
-                const state = !cur.playing ? 'PAUSED' : !clk ? 'TIMED FROM THE SONG CHANGE' : '';
-                if (state) cv.text(state, x + s / 2, py + 28, 13, G.withAlpha(WHITE, 0.55), { align: 'center', font: 'bold', spacing: 1.5, literal: true });
+                const py = ty + 28, pos = Math.max(0, position(now) - offset()), dur = cur.duration || 0;
+                cv.roundRect(x, py, s, 6, 3, G.withAlpha(WHITE, 0.2));
+                if (dur) cv.roundRect(x, py, Math.max(6, Math.min(1, pos / dur) * s), 6, 3, G.withAlpha(WHITE, 0.85));
+                cv.text(mmss(pos), x, py + 30, 16, G.withAlpha(WHITE, 0.55), M);
+                if (dur) cv.text('-' + mmss(dur - pos), x + s, py + 30, 16, G.withAlpha(WHITE, 0.55), Object.assign({ align: 'right' }, M));
+                const state = !cur.playing ? 'Paused' : !clk ? 'Timed from the song change' : '';
+                if (state) cv.text(state, x + s / 2, py + 30, 16, G.withAlpha(WHITE, 0.55), Object.assign({ align: 'center' }, M));
                 // no time from the car: the Sync button (here where the kit runs the screen, the bar's elsewhere)
                 if (!clk && cv.own) {
                     const bw = 220, bx = x + (s - bw) / 2, bt = py + 44;
                     cv.roundRect(bx, bt, bw, 46, 23, G.withAlpha(WHITE, 0.14));
                     cv.strokeRoundRect(bx, bt, bw, 46, 23, 1, G.withAlpha(WHITE, 0.3));
-                    cv.text('SONG JUST STARTED', bx + bw / 2, bt + 29, 15, WHITE, { align: 'center', font: 'bold', spacing: 1.5, literal: true });
+                    cv.text('Song just started', bx + bw / 2, bt + 30, 18, WHITE, { align: 'center', font: F_BOLD, literal: true });
                     FS.button(cv, 'sync', bx, bt, bw, 46, sync, { r: 23 });
                 }
             }
@@ -224,7 +247,7 @@ mgu.run({
             let laid = null;          // { lines, w, blocks: [{ rows, top, h, gap }] }
             function layout(cv, lines, w) {
                 if (laid && laid.lines === lines && laid.w === w) return laid;
-                const opt = { font: 'bold', literal: true }, blocks = [];
+                const opt = { font: F_BOLD, literal: true }, blocks = [];
                 let y = 0;
                 lines.forEach((l) => {
                     const rows = l.text ? wrap(cv, l.text, LYR.size, w, LYR.max, opt) : [];
@@ -251,18 +274,33 @@ mgu.run({
                     const b = B[j], y = anchor + b.top - scrollOf(glide, Math.max(0, j - i), now);
                     if (y > bottom + 20) break;
                     if (y + b.h < top - 20) continue;
-                    // brightness: the line being sung full, the one before fading out, the rest faded; dimmer near the edges
-                    let a = j === i ? 0.34 + 0.66 * fadeIn : j === glide.prev && glide.prev >= 0 ? 1 - 0.66 * fadeIn : 0.34;
-                    if (j < i) a = Math.min(a, j === glide.prev ? a : 0.26);
-                    const edge = Math.min(1, (y + b.h - top) / 90, (bottom - y) / 120);
+                    // the line being sung lights up as the one before goes back to the rest
+                    const rest = j < i ? PAST_A : NEXT_A;
+                    let a = rest, blur = Math.min(BLUR_MAX, Math.abs(j - Math.max(0, i)) * BLUR_PX);
+                    if (j === i) { a = rest + (1 - rest) * fadeIn; blur *= 1 - fadeIn; } else if (j === glide.prev && glide.prev >= 0) { a = 1 - (1 - PAST_A) * fadeIn; blur = Math.min(BLUR_MAX, BLUR_PX) * fadeIn; }
+                    if (j === i && i >= 0) blur = 0;
+                    const edge = Math.min(1, (y + b.h - top) / 90, (bottom - y) / 140);
                     a *= Math.max(0, edge);
                     if (a <= 0.01) continue;
-                    if (!b.rows.length) { dots(cv, Q.LX, y, a, lines, j, p); continue; }
-                    cv.alpha(a);
-                    b.rows.forEach((row, k) => cv.text(row, Q.LX, y + k * LYR.lh + Math.round(LYR.size * 0.78), LYR.size, WHITE, { font: 'bold', literal: true }));
-                    cv.alpha(1);
+                    if (!b.rows.length) { dots(cv, Q.LX, y, j === i ? 1 : a, lines, j, p); continue; }
+                    b.rows.forEach((row, k) => soft(cv, row, Q.LX, y + k * LYR.lh + Math.round(LYR.size * 0.8), LYR.size, a, blur));
                 }
                 cv.noclip();
+            }
+            /**
+             * Text at brightness a, blurred by radius r. The kit draws no blur, so the line is drawn several times,
+             * once in place and in rings around it, each faint, adding up to a soft-edged line of brightness a:
+             * one ring of 6 for a light blur, rings of 8 and 4 (13 copies in all) for a heavier one.
+             */
+            const ring = (n, k, ph) => { const out = []; for (let q = 0; q < n; q++) out.push([Math.cos(ph + q * 2 * Math.PI / n) * k, Math.sin(ph + q * 2 * Math.PI / n) * k]); return out; };
+            const LIGHT = [[0, 0]].concat(ring(6, 1, 0)), HEAVY = [[0, 0]].concat(ring(8, 1, 0), ring(4, 0.5, Math.PI / 4));
+            function soft(cv, s, x, y, size, a, r) {
+                const o = { font: F_BOLD, literal: true };
+                if (r < 0.35) { cv.alpha(a); cv.text(s, x, y, size, WHITE, o); cv.alpha(1); return; }
+                const taps = r < 1.6 ? LIGHT : HEAVY;
+                cv.alpha(1 - Math.pow(1 - a, 1 / taps.length));
+                taps.forEach((d) => cv.text(s, x + d[0] * r, y + d[1] * r, size, WHITE, o));
+                cv.alpha(1);
             }
             /** The scroll (px) of a line `lag` lines below the one being sung: each starts its glide a little later. */
             function scrollOf(g, lag, now) {
@@ -277,20 +315,20 @@ mgu.run({
                 }
             }
             function drawPlain(cv, Q, text) {
-                cv.text('LYRICS (NOT SYNCED TO THE SONG)', Q.LX, Q.A.y + 34, 14, G.withAlpha(WHITE, 0.6), { font: 'bold', spacing: 1.5, literal: true });
+                cv.text('Lyrics (not synced to the song)', Q.LX, Q.A.y + 34, 18, G.withAlpha(WHITE, 0.6), { font: F_MED, literal: true });
                 let y = Q.A.y + 80;
                 text.filter(Boolean).some((s, k) => {
-                    const rows = wrap(cv, s, 32, Q.LW, 2, { font: 'bold', literal: true });
+                    const rows = wrap(cv, s, 32, Q.LW, 2, { font: F_BOLD, literal: true });
                     if (y + rows.length * 42 > Q.A.bottom) return true;
-                    rows.forEach((r) => { cv.text(r, Q.LX, y, 32, G.withAlpha(WHITE, k ? 0.6 : 1), { font: 'bold', literal: true }); y += 42; });
+                    rows.forEach((r) => { cv.text(r, Q.LX, y, 32, G.withAlpha(WHITE, k ? 0.6 : 1), { font: F_BOLD, literal: true }); y += 42; });
                     y += 12;
                     return false;
                 });
             }
             function message(cv, Q, a, b) {
                 const y = Q.A.y + Math.round(Q.A.h * 0.42);
-                cv.text(fit(cv, a, 40, Q.LW, { font: 'bold' }), Q.LX, y, 40, WHITE, { font: 'bold', literal: true });
-                if (b) wrap(cv, b, 22, Q.LW, 2).forEach((r, k) => cv.text(r, Q.LX, y + 46 + k * 30, 22, G.withAlpha(WHITE, 0.66), { literal: true }));
+                cv.text(fit(cv, a, 40, Q.LW, { font: F_BOLD }), Q.LX, y, 40, WHITE, { font: F_BOLD, literal: true });
+                if (b) wrap(cv, b, 22, Q.LW, 2, { font: F_MED }).forEach((r, k) => cv.text(r, Q.LX, y + 46 + k * 30, 22, G.withAlpha(WHITE, 0.62), { font: F_MED, literal: true }));
             }
 
             ctx.loop('MAIN', 2, guard('main', async () => {
@@ -304,8 +342,8 @@ mgu.run({
                     const P = nameColours('Car Lyrics');
                     backdrop(cv, null, now, P, fullH);
                     const cy = A.y + A.h / 2;
-                    cv.text('Play a song on your phone', W / 2, cy - 6, 40, WHITE, { font: 'bold', align: 'center', literal: true });
-                    cv.text('Apple Music over CarPlay, or any app over Bluetooth. The lyrics show up here.', W / 2, cy + 40, 21, G.withAlpha(WHITE, 0.66), { align: 'center', literal: true });
+                    cv.text('Play a song on your phone', W / 2, cy - 6, 40, WHITE, { font: F_BOLD, align: 'center', literal: true });
+                    cv.text('Apple Music over CarPlay, or any app over Bluetooth. The lyrics show up here.', W / 2, cy + 40, 22, G.withAlpha(WHITE, 0.62), { align: 'center', font: F_MED, literal: true });
                 } else {
                     const P = nameColours(cur.title + cur.artist), a = artFor(), Q = geo(A);
                     backdrop(cv, a, now, P, fullH);
@@ -320,10 +358,10 @@ mgu.run({
                     else message(cv, Q, 'No lyrics for this song', 'LRCLIB has no lyrics for this title and artist yet.');
                 }
                 if (toast && Date.now() < toast.until) {
-                    const s = fit(cv, toast.text, 22, 1000), w = cv.textWidth(s, 22, { literal: true }) + 64, ty = A.bottom - 64;
+                    const TO = { font: F_MED, literal: true }, s = fit(cv, toast.text, 22, 1000, TO), w = cv.textWidth(s, 22, TO) + 64, ty = A.bottom - 64;
                     cv.roundRect((W - w) / 2, ty, w, 50, 25, '#000000c0');
                     cv.strokeRoundRect((W - w) / 2, ty, w, 50, 25, 1, G.withAlpha(WHITE, 0.25));
-                    cv.text(s, W / 2, ty + 32, 22, WHITE, { align: 'center', literal: true });
+                    cv.text(s, W / 2, ty + 32, 22, WHITE, Object.assign({ align: 'center' }, TO));
                 }
                 await ui.image('MAIN_GFX', cv);
             }));

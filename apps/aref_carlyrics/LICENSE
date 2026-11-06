@@ -267,3 +267,7 @@ License, Version 2.0, whose text follows.
    limitations under the License.
 
 ------------------------------------------------------------------------
+
+Car Lyrics also bundles data/fonts/cl_bold.json and cl_med.json: glyph atlases baked from Inter Display
+Bold and Inter Medium (https://github.com/rsms/inter), Copyright (c) 2016 The Inter Project Authors,
+under the SIL Open Font License 1.1 (data/fonts/LICENSE-Inter.txt).

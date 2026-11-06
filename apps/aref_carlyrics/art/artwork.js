@@ -8,6 +8,7 @@
  *
  *   cover: ART_PX x ART_PX, centre-cropped, corners rounded in its alpha
  *   blur:  BG_W x BG_H, the cover heavily blurred and darkened, drawn stretched behind the whole page
+ *   blur2: the same from the cover turned round, a second layer drifting the other way
  *          (the renderer scales pictures by the nearest pixel, and a blur this soft shows no steps)
  *
  *   const art = new Artwork(request, log);
@@ -24,7 +25,8 @@ const ART_PX = 600;           // the cover's pixels (drawn ~380 logical px, ~440
 const ART_R = 0.04;           // its corner radius, share of its side
 const BG_W = 400, BG_H = 150; // the backdrop's pixels (drawn ~1600 x 600 logical)
 const BLUR = 18;              // the backdrop's box-blur radius (px of BG_W), three passes ~ a gaussian
-const DIM = 0.52;             // the backdrop's brightness (white lyrics stay readable on any cover)
+const DIM = 0.55;             // the backdrop's brightness (Apple Music: the blur under a 50 % black layer)
+const SATURATE = 1.5;         // ... and its colour (Apple Music: saturate(1.5))
 const RETRY_MS = 60000;       // a failed lookup is tried again after this long
 const CACHE = 4;              // covers kept (a song played again, skipping back)
 
@@ -112,13 +114,17 @@ function boxPass(c, w, h, r) {
  * The backdrop: the cover (RGBA n x n) scaled to cover w x h, blurred (three box passes), saturation
  * lifted a little and brightness to DIM, as Apple Music's blurred artwork behind its lyrics. RGBA bytes.
  */
-function backdrop(px, n, w, h) {
-    // cover-fit: the square's middle band, as wide as the page is
+function backdrop(px, n, w, h, turned) {
+    // cover-fit: the square's middle band, as wide as the page is (turned: the cover upside down and
+    // mirrored, a second layer that moves the other way, as Apple Music's background flows)
     const k = n / w, oy = (n - h * k) / 2, c = new Float32Array(w * h * 3);
     for (let y = 0; y < h; y++) {
-        const sy = Math.max(0, Math.min(n - 1, Math.round(oy + (y + 0.5) * k)));
+        let sy = Math.max(0, Math.min(n - 1, Math.round(oy + (y + 0.5) * k)));
+        if (turned) sy = n - 1 - sy;
         for (let x = 0; x < w; x++) {
-            const sx = Math.max(0, Math.min(n - 1, Math.round((x + 0.5) * k))), s = (sy * n + sx) * 4, o = (y * w + x) * 3;
+            let sx = Math.max(0, Math.min(n - 1, Math.round((x + 0.5) * k)));
+            if (turned) sx = n - 1 - sx;
+            const s = (sy * n + sx) * 4, o = (y * w + x) * 3;
             c[o] = px[s]; c[o + 1] = px[s + 1]; c[o + 2] = px[s + 2];
         }
     }
@@ -126,7 +132,7 @@ function backdrop(px, n, w, h) {
     const out = new Uint8Array(w * h * 4);
     for (let i = 0, o = 0; i < c.length; i += 3, o += 4) {
         const r = c[i], g = c[i + 1], b = c[i + 2], l = 0.3 * r + 0.59 * g + 0.11 * b;
-        const sat = (v) => Math.max(0, Math.min(255, (l + (v - l) * 1.35) * DIM));
+        const sat = (v) => Math.max(0, Math.min(255, (l + (v - l) * SATURATE) * DIM));
         out[o] = sat(r); out[o + 1] = sat(g); out[o + 2] = sat(b); out[o + 3] = 255;
     }
     return out;
@@ -183,8 +189,7 @@ class Artwork {
     fromJpeg(buf) {
         const im = this.decode(buf, { useTArray: true, formatAsRGBA: true, maxResolutionInMP: 4, maxMemoryUsageInMB: 48 });
         const sq = squareResample(im.data, im.width, im.height, ART_PX, Math.round(ART_PX * ART_R));
-        const blur = backdrop(sq.px, ART_PX, BG_W, BG_H);
-        return { state: 'ready', at: Date.now(), cover: sq.px, blur: blur, tint: sq.avg };
+        return { state: 'ready', at: Date.now(), cover: sq.px, blur: backdrop(sq.px, ART_PX, BG_W, BG_H), blur2: backdrop(sq.px, ART_PX, BG_W, BG_H, true), tint: sq.avg };
     }
 }
 
