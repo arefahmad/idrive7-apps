@@ -23,5 +23,5 @@ built on a PC and confirmed on a car one by one.
 | **Car health score** | One score from Fault Watch, Car Care, and the tyre and battery trends, as a widget |
 | **Tyre slow-leak detector** | Each tyre's pressure over days; a warning when one drops faster than the others |
 | **Battery health** | The 12 V and 48 V batteries at every start; a warning when the trend drops |
-| **Car Link** | Homelab alerts on the car's screen, drive recaps to Discord, reminders from the phone |
+| **Car Link** | Homelab alerts on the car's screen, drive recaps to Discord, reminders from the phone, and a Discord alert the moment Fault Watch logs a new or active fault (the code, the control unit, and the drive at that moment). Needs the homelab running and internet in the car |
 | **Home and away** | The car tells the homelab when it leaves home and when it arrives (room lights off and on) |
