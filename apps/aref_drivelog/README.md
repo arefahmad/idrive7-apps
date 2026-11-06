@@ -27,6 +27,34 @@ the car switches off. Moves shorter than 200 m (the driveway) aren't kept. Up to
 
 ## Screens
 
+Screens rendered on a PC from the app's own drawing code with made-up data (`tools/screens.js`), not photos of a car.
+
+### This drive
+
+![This drive](screenshots/this-drive.png)
+
+The drive going on, or the last one, with the Dragy-adjusted 0-60 under the car's own time.
+
+### History
+
+![History](screenshots/history.png)
+
+Every drive kept, newest first.
+
+### 0-60 runs
+
+![0-60 runs](screenshots/runs.png)
+
+Each run with its Dragy time, the difference, and the adjusted time. The offset is in the top right.
+
+### Enter Dragy time
+
+![Enter Dragy time](screenshots/enter-dragy.png)
+
+Setting the Dragy's time for a run with the bar buttons.
+
+## Screens
+
 - **This drive:** the drive going on, or the last one when parked, as ten tiles.
 - **History:** every drive kept, newest first.
 - **0-60 runs:** every timed run, with its Dragy time and the adjusted time once known.

@@ -31,6 +31,22 @@ temperature and drive mode. A pattern shows up: always above 60 mph, always cold
 Faults show as the code and the control unit's name. Look a code up in ISTA, ProTool or BimmerCode for its
 text. A unit that doesn't answer a scan (asleep, busy) keeps its faults: they aren't reported as cleared.
 
+## Screens
+
+Screens rendered on a PC from the app's own drawing code with made-up data (`tools/screens.js`), not photos of a car.
+
+### Timeline
+
+![Timeline](screenshots/timeline.png)
+
+Every change with its time and the drive at that moment.
+
+### Current faults
+
+![Current faults](screenshots/current.png)
+
+What the last scan found.
+
 ## Settings
 
 | Setting | Values | Default |

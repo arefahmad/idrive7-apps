@@ -27,6 +27,22 @@ from CarPlay and Bluetooth to show them in its own media screens.
   when it changes. Tap this to sync it.
 - **Lyrics timing** (Settings): moves the lyrics up to 3 s earlier or later.
 
+## Screens
+
+Screens rendered on a PC from the app's own drawing code with made-up data (`tools/screens.js`), not photos of a car.
+
+### Lyrics
+
+![Lyrics](screenshots/lyrics.png)
+
+The current line large, the ones around it fading. The song and lyrics here are made up.
+
+### Probe
+
+![Probe](screenshots/probe.png)
+
+Every value the car sends from the CarPlay and media interfaces.
+
 ## The probe
 
 Version 0.1 subscribes to every field of BMW's `CarPlayManager` and `MediaPlayer` interfaces and picks the

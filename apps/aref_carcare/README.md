@@ -35,6 +35,22 @@ ignition coils, differential and transfer case fluid, transmission fluid.
 - **At a glance:** each item shows a bar of the interval used and what is left, in amber when due soon
   (from 90 %) and red when overdue.
 
+## Screens
+
+Screens rendered on a PC from the app's own drawing code with made-up data (`tools/screens.js`), not photos of a car.
+
+### Items
+
+![Items](screenshots/items.png)
+
+Each item, the interval used, and what is left. Due soon in amber, overdue in red.
+
+### Done earlier
+
+![Done earlier](screenshots/done-earlier.png)
+
+Recording a service from before the app: miles and months ago.
+
 ## What it doesn't do
 
 - It never resets, changes or reads BMW's CBS items. Your dealer's reminders stay exactly as they are.

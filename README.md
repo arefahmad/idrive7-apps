@@ -59,6 +59,8 @@ Updates appear in the Store. To remove an app, remove it in the Store; its data 
   cauliflowermossgrape's kit, and one line in `kit/tools/build.py` that copies app.json's
   `"mguAppStartType"` (autostart) into the package.
 - `test/`: plain-Node tests for each app's logic, not installed: `for f in test/*.test.js; do node $f; done`.
+- `tools/screens.js`: renders every app's screens on a PC with made-up data into `apps/<id>/screenshots/`
+  (`node tools/screens.js`), through the same recorder the car uses.
 - The car runs **Node 8**: no `?.`, `??`, object spread, `import`, class fields or optional catch binding.
 - Bump an app's `version` in `app.json` on every change that alters what it installs (its own files or
   `kit/`).
