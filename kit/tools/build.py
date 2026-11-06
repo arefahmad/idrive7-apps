@@ -518,6 +518,8 @@ def build(app_id, language='en'):
     # list the app for mgu-uplink (apps.d/<id>) so its uid gets the phone/Wi-Fi uplink (local kit patch)
     if spec.get('internet') is True:
         pkg['mguInternet'] = True
+    # (arefahmad/idrive7-apps, as pinguinooo/idrive7-apps) app.json "mguAppStartType" goes to package.json: mgu-store's deploy reads it there
+    if spec.get('mguAppStartType') in ('autostart', 'lum', 'manually'): pkg['mguAppStartType'] = spec['mguAppStartType']
     json.dump(pkg, open(os.path.join(src, 'package.json'), 'w', encoding='utf-8', newline='\n'), indent=2)
     json.dump(manifest, open(os.path.join(src, 'manifest.json'), 'w', encoding='utf-8', newline='\n'), indent=2)
     shutil.copy(os.path.join(KIT, 'platform', 'permissions.json'), os.path.join(src, 'permissions.json'))

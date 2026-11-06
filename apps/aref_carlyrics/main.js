@@ -20,7 +20,7 @@ const NP = require('./nowplaying');
 const LyricsLib = require('./lyrics');
 const http = require('./http');
 
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
