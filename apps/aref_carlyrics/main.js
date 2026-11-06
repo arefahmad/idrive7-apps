@@ -1,12 +1,20 @@
 'use strict';
 /**
  * Car Lyrics: synced lyrics for whatever the car is playing (Apple Music over CarPlay, Bluetooth, USB),
- * with no Spotify and no phone app. The track comes from the head unit itself (car/nowplaying.js), the
- * lyrics from LRCLIB (stage/lyrics.js, from G's Music).
+ * with no Spotify and no phone app. The track and the time in it come from the head unit itself
+ * (car/nowplaying.js: BMW's MediaPlayer, CarPlay's instance CarPlayMedia), the lyrics from LRCLIB
+ * (stage/lyrics.js, from G's Music), the album art from Apple's iTunes Search API (art/artwork.js).
  *
- * Version 0.1 is also a probe: which interface and field carry the CarPlay track on iDrive 7 is not
- * known yet, so the Probe screen shows every value the car reports and the interfaces in its catalog
- * that look like media. The same goes to the app's log and to carlyrics-probe.txt in its data folder.
+ * A full-screen page ("fullscreen": true, kit/runtime/fullscreen.js), drawn like Apple Music's lyrics
+ * view: the song's artwork blurred behind everything, the cover with the title and a progress line on
+ * the left, and the lyrics on the right, big and bold, the line being sung bright and the rest faded,
+ * gliding up line by line. Header tabs: Lyrics, Probe (every value the car reports), Settings.
+ * Where the kit can't run the screen (software renderer) the HMI's bar buttons do the same jobs.
+ *
+ * Timing: the car sends the time in the song about once a second (currentItemTime.elapsed, ms). The page
+ * runs its own clock between those, pulled gently toward each new value, so the lyrics move smoothly
+ * and never jump; paused, it stops. Only a source that sends no time falls back to timing the song from
+ * when it changed (and the Sync button).
  *
  * Read-only toward the car: it subscribes to and reads fields, never calls a method or writes a value.
  *
@@ -16,12 +24,16 @@
 const fs = require('fs');
 const path = require('path');
 const mgu = require('./kit/mgu');
+const G = require('./kit/gauges');
+const FS = require('./kit/fullscreen');
+const record = require('./kit/record');
 const NP = require('./nowplaying');
 const LyricsLib = require('./lyrics');
+const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.2.4';
+const VERSION = '0.3.0';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -31,10 +43,54 @@ const IFACES = [
     { iface: 'de.bmw.infotainment.hmi.hmimediastate.HmiMediaState', instances: [] },
     { iface: 'de.bmw.infotainment.entertainment.dynamicmediaplayer.DynamicMediaPlayer', instances: [] },
 ];
-const LEAD_MS = 250;              // a line shows this much before its time (reading takes a moment)
-const SCROLL_MS = 300;            // a new line slides into the middle over this long
-const TICK_CAP_MS = 2500;         // a position the car keeps sending: no guessing further than this past it
+const ART_ID = 41, BG_ID = 42;    // pixel picture ids (record.setImage)
+const FRAME_MS = 1000 / 30;       // the animation clock's step: at most 30 different frames a second
+const LEAD_MS = 250;              // a line lights up this much before its time (reading takes a moment)
+const GLIDE_MS = 620;             // the lyrics glide to the next line over this long
+const STAGGER_MS = 45;            // ... each line below a little after the one above (Apple Music's ripple)
+const FADE_MS = 320;              // a line brightens (and the last one fades) over this long
+const NUDGE = 0.3;                // share of the gap to a new time from the car that the clock takes at once
+const SNAP_MS = 1500;             // a gap bigger than this (a seek, a skip back) is jumped, not glided
+const HOLD_MS = 4000;             // the clock runs at most this far past the car's last time
 const REPORT_MS = 60000;          // carlyrics-probe.txt is written again this often (when anything changed)
+const LYR = { size: 44, lh: 54, gap: 30, max: 3 };   // lyric text size, line height, gap between lines, wrapped lines at most
+
+const WHITE = '#ffffff';
+const easeOut = (e) => 1 - Math.pow(1 - Math.max(0, Math.min(1, e)), 3);
+const mmss = (ms) => { const s2 = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s2 / 60) + ':' + (s2 % 60 < 10 ? '0' : '') + (s2 % 60); };
+
+/** Cut s to fit width w at size (an ellipsis when cut). */
+function fit(cv, s, size, w, opt) {
+    s = LyricsLib.fold(String(s || ''));
+    const o = Object.assign({ literal: true }, opt || {});
+    if (cv.textWidth(s, size, o) <= w) return s;
+    let lo = 0, hi = s.length;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (cv.textWidth(s.slice(0, mid) + '...', size, o) <= w) lo = mid; else hi = mid - 1; }
+    return s.slice(0, lo).replace(/\s+$/, '') + '...';
+}
+/** Word-wrap s to lines of at most w px (at most max lines; the last one cut). */
+function wrap(cv, s, size, w, max, opt) {
+    const o = Object.assign({ literal: true }, opt || {});
+    const words = LyricsLib.fold(String(s || '')).split(/\s+/).filter(Boolean), out = [];
+    let cur = '';
+    words.forEach((word) => {
+        const next = cur ? cur + ' ' + word : word;
+        if (!cur || cv.textWidth(next, size, o) <= w) cur = next; else { out.push(cur); cur = word; }
+    });
+    if (cur) out.push(cur);
+    if (max && out.length > max) { const rest = out.slice(max - 1).join(' '); out.length = max - 1; out.push(fit(cv, rest, size, w, opt)); }
+    return out;
+}
+/** Colours for a song without artwork, from its name (each song its own). */
+function nameColours(seed) {
+    let h = 0;
+    for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+    const hue = h % 360, hsl = (hh, ss, ll) => {
+        const a = ss * Math.min(ll, 1 - ll), f = (n) => { const k = (n + hh / 30) % 12; const v = Math.round(255 * (ll - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); return ('0' + v.toString(16)).slice(-2); };
+        return '#' + f(0) + f(8) + f(4);
+    };
+    return { top: hsl(hue, 0.5, 0.24), bottom: hsl((hue + 35) % 360, 0.55, 0.08), glow: hsl((hue + 330) % 360, 0.7, 0.42), art1: hsl(hue, 0.6, 0.5), art2: hsl((hue + 45) % 360, 0.65, 0.28) };
+}
 
 mgu.run({
     async start(ctx) {
@@ -44,162 +100,230 @@ mgu.run({
         };
         try {
             const net = http.client(ctx.dataDir);
-            const lyrics = new LyricsLib.Lyrics((m, h, p, hd) => net.request(m, h, p, hd), log,
-                'CarLyrics/' + VERSION + ' (iDrive 7 head-unit app; ' + HOMEPAGE + ')');
+            const request = (m, h, p, hd) => net.request(m, h, p, hd);
+            const lyrics = new LyricsLib.Lyrics(request, log, 'CarLyrics/' + VERSION + ' (iDrive 7 head-unit app; ' + HOMEPAGE + ')');
+            const artwork = new ART.Artwork(request, log);
             const np = new NP.NowPlaying(ctx.signals, log, IFACES);
             let catalog = { error: 'not read yet', hits: [] };
             let toast = null;
             const say = (text, ms) => { toast = { text: text, until: Date.now() + (ms || 3000) }; };
 
-            /* ---------- the track and where in it we are ---------- */
-            let cur = null;           // { key, title, artist, album, duration }
-            let startAt = Date.now(); // estimated: when the track began (ms epoch)
-            let posVal = null, posAt = 0, posTicks = 0;   // the car's own position, when it sends one
+            /* ---------- the track, and the clock that follows the car's time in it ---------- */
+            let cur = null;           // { key, title, artist, album, duration, playing }
+            let clk = null;           // { pos, at, playing, last }: the song's time pos (ms) at at (ms epoch)
+            let startAt = Date.now(); // a source with no time of its own: when the song (probably) began
+            const clockAt = (now) => clk.pos + (clk.playing ? Math.min(now - clk.at, HOLD_MS) : 0);
             const follow = () => {
                 const t = np.track();
                 if (!t) return;
                 const key = t.title + '|' + t.artist;
                 if (!cur || cur.key !== key) {
-                    cur = { key: key, title: t.title, artist: t.artist, album: t.album, duration: t.duration || 0, from: t.from };
-                    startAt = Date.now(); posVal = null; posTicks = 0;
+                    cur = { key: key, title: t.title, artist: t.artist, album: t.album, duration: t.duration || 0, playing: true };
+                    clk = null; startAt = Date.now();
                     log.info('track: "' + t.title + '" by "' + t.artist + '" (' + Math.round((t.duration || 0) / 1000) + ' s) from ' + t.from);
                 }
-                if (t.duration && !cur.duration) cur.duration = t.duration;
-                if (t.position !== null && t.position !== undefined && t.position !== posVal) {
-                    if (posVal !== null) posTicks++;
-                    posVal = t.position; posAt = t.positionAt || Date.now();
-                }
+                if (t.duration) cur.duration = t.duration;
+                if (t.album) cur.album = t.album;
+                const playing = t.direct ? !!t.playing : true;
+                cur.playing = playing;
+                if (t.position === null || t.position === undefined) return;
+                const at = t.positionAt || Date.now();
+                if (!clk) { clk = { pos: t.position, at: at, playing: playing, last: t.position }; return; }
+                if (t.position === clk.last && playing === clk.playing) return;
+                const predicted = clockAt(at), gap = t.position - predicted;
+                // a seek, a skip back, a pause or a resume: jump; else glide toward the car's time
+                if (!playing || !clk.playing || Math.abs(gap) > SNAP_MS) clk.pos = t.position;
+                else clk.pos = predicted + gap * NUDGE;
+                clk.at = at; clk.playing = playing; clk.last = t.position;
             };
             np.onChange(guard('change', follow));
             const offset = () => Number(settings.get('offset')) || 0;
-            const position = () => {
-                if (posVal !== null) {
-                    // a position that keeps coming is followed between updates, but never guessed far past the last one
-                    const dt = Date.now() - posAt;
-                    return posVal + (posTicks >= 2 ? Math.min(dt, TICK_CAP_MS) : dt) + offset();
+            const position = (now) => (clk ? clockAt(now || Date.now()) : (now || Date.now()) - startAt) + offset();
+            const sync = () => { startAt = Date.now(); say('Synced: the song starts now'); };
+            ui.onClick('BTN_SYNC', guard('sync', sync));
+
+            /* ---------- artwork: uploaded to the renderer once per song ---------- */
+            let artShown = 0;         // the artwork version uploaded
+            const artFor = () => {
+                if (!cur) return null;
+                const a = artwork.get({ title: cur.title, artist: cur.artist, album: cur.album });
+                if (a.state !== 'ready') return null;
+                if (a.ver !== artShown) {
+                    record.setImage(ART_ID, ART.ART_PX, ART.ART_PX, a.cover);
+                    record.setImage(BG_ID, ART.BG_W, ART.BG_H, a.blur);
+                    artShown = a.ver;
                 }
-                return Date.now() - startAt + offset();
+                return a;
             };
-            const timing = () => (posVal !== null ? 'from the car' : 'estimated (tap "Song just started" to sync)');
 
-            ui.onClick('BTN_SYNC', guard('sync', () => { startAt = Date.now(); posVal = null; posTicks = 0; say('Synced: the song starts now'); }));
+            /* ---------- the page ---------- */
+            FS.setup(ctx);                            // where the kit runs the screen: the page's own buttons and tabs
+            let probe = false;                        // the Probe tab
+            if (ctx.onTab) ctx.onTab(guard('tab', (i) => { probe = i === 1; page = 0; vpage = 0; showButtons(); }));
 
-            /* ---------- MAIN: the song and its lyrics ---------- */
-            const fit = (cv, s, size, w, opt) => {
-                s = String(s || '');
-                if (cv.textWidth(s, size, opt) <= w) return s;
-                while (s.length > 1 && cv.textWidth(s + '...', size, opt) > w) s = s.slice(0, -1);
-                return s + '...';
-            };
-            /*
-             * The glass look: a deep gradient in the song's own colours (picked from its title, so each song has
-             * its own), soft glows behind frosted panels, and lyrics left-aligned and bold, the current line in
-             * full white and the others faded, as Apple Music shows them.
-             */
-            const GX = 40, GW = 440, LX = 540, LW = W - LX - 60;     // the now-playing panel; the lyrics column
-            function palette(seed) {
-                let h = 0;
-                for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-                const hue = h % 360, hsl = (hh, ss, ll) => {
-                    const a = ss * Math.min(ll, 1 - ll), f = (n) => { const k = (n + hh / 30) % 12; return Math.round(255 * (ll - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
-                    return [f(0), f(8), f(4), 255];
-                };
-                return { top: hsl(hue, 0.55, 0.22), bottom: hsl((hue + 40) % 360, 0.6, 0.07), glow1: hsl((hue + 330) % 360, 0.8, 0.45), glow2: hsl((hue + 60) % 360, 0.7, 0.4), art1: hsl(hue, 0.65, 0.5), art2: hsl((hue + 50) % 360, 0.7, 0.3) };
+            /** The layout in the safe area A: the cover column on the left, the lyrics to its right. */
+            function geo(A) {
+                const S = Math.round(Math.max(240, Math.min(400, A.h - 138)));
+                const colH = S + 138, x0 = A.x + 36, y0 = A.y + Math.max(0, Math.round((A.h - colH) / 2));
+                const LX = x0 + S + 84;
+                return { A: A, S: S, x0: x0, y0: y0, LX: LX, LW: A.right - 40 - LX };
             }
-            const A = (c, a) => [c[0], c[1], c[2], Math.round(255 * a)];
-            const WHITE = [255, 255, 255, 255];
-            function backdrop(cv, P) {
-                cv.gradientRect(0, 0, W, H, [[0, P.top], [1, P.bottom]]);
-                // soft glows (stacked translucent circles stand in for a blur)
-                [[260, 120, P.glow1], [1250, 420, P.glow2], [900, 60, P.glow1]].forEach((g) => {
-                    for (let r = 320; r > 20; r -= 15) cv.circle(g[0], g[1], r, A(g[2], 0.014));
-                });
+
+            /** The blurred artwork behind everything (or the song's colours), drifting slowly while it plays. */
+            function backdrop(cv, a, now, P, fullH) {
+                if (a) {
+                    const d = cur && cur.playing ? now / 1000 : 0;
+                    const sc = 1.18, bw = W * sc, bh = fullH * sc;
+                    const dx = Math.sin(d / 11) * 0.06 * W, dy = Math.cos(d / 13) * 0.05 * fullH;
+                    cv.image(BG_ID, (W - bw) / 2 + dx, (fullH - bh) / 2 + dy, bw, bh);
+                } else {
+                    cv.gradientRect(0, 0, W, fullH, [[0, P.top], [1, P.bottom]]);
+                    for (let r = 340; r > 20; r -= 16) cv.circle(300, 120, r, G.withAlpha(P.glow, 0.016));
+                    for (let r = 300; r > 20; r -= 16) cv.circle(1300, fullH - 60, r, G.withAlpha(P.glow, 0.012));
+                }
+                // a little darker at the top and the bottom, as glass over the artwork
+                cv.gradientRect(0, 0, W, fullH, [[0, G.withAlpha('#000000', 0.3)], [0.45, G.withAlpha('#000000', 0)], [1, G.withAlpha('#000000', 0.4)]]);
             }
-            function glass(cv, x, y, w, h, r) {
-                cv.roundRect(x, y, w, h, r, A(WHITE, 0.09));
-                cv.strokeRoundRect(x, y, w, h, r, 1.5, A(WHITE, 0.18));
-                cv.roundRect(x + 1, y + 1, w - 2, Math.min(60, h / 3), r, A(WHITE, 0.04));     // a sheen at the top
-            }
-            const mmss = (ms) => { const s2 = Math.max(0, Math.round(ms / 1000)); return Math.floor(s2 / 60) + ':' + String(s2 % 60).padStart(2, '0'); };
-            function nowPlaying(cv, P) {
-                glass(cv, GX, 30, GW, H - 60, 28);
-                // the "artwork": the song's colours and its initials (the car doesn't pass the artwork on)
-                const ax = GX + 30, ay = 58, as = 180;
-                cv.card(ax, ay, as, as, 18, [[0, P.art1], [1, P.art2]]);
-                const ini = cur.title.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
-                cv.text(ini, ax + as / 2, ay + as / 2 + 26, 72, A(WHITE, 0.9), { font: 'bold', align: 'center', literal: true });
-                const tx = ax + as + 24, tw = GW - (tx - GX) - 24;
-                cv.text('NOW PLAYING', tx, ay + 22, 13, A(WHITE, 0.6), { font: 'bold', spacing: 1.5, literal: true });
+
+            function coverColumn(cv, Q, a, P, now) {
+                const x = Q.x0, y = Q.y0, s = Q.S, r = Math.round(s * 0.04);
+                // a soft shadow under the cover
+                for (let k = 1; k <= 6; k++) cv.roundRect(x - k * 3, y + 8 + k, s + k * 6, s + k * 2, r + k * 3, G.withAlpha('#000000', 0.06));
+                if (a) cv.image(ART_ID, x, y, s, s);
+                else {
+                    cv.card(x, y, s, s, r, [[0, P.art1], [1, P.art2]]);
+                    const ini = LyricsLib.fold(cur.title).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+                    cv.text(ini, x + s / 2, y + s / 2 + s * 0.13, Math.round(s * 0.36), G.withAlpha(WHITE, 0.92), { font: 'bold', align: 'center', literal: true });
+                }
                 const B = { font: 'bold', literal: true };
-                let size = 28;
-                while (size > 20 && cv.textWidth(cur.title, size, B) > tw) size -= 2;
-                cv.text(fit(cv, cur.title, size, tw, B), tx, ay + 64, size, WHITE, B);
-                cv.text(fit(cv, cur.artist, 20, tw, { literal: true }), tx, ay + 96, 20, A(WHITE, 0.7), { literal: true });
-                if (cur.album) cv.text(fit(cv, cur.album, 16, tw, { literal: true }), tx, ay + 122, 16, A(WHITE, 0.5), { literal: true });
-                // the progress line with times
-                const py = ay + as + 48, pw = GW - 60, pos = position();
-                cv.roundRect(GX + 30, py, pw, 6, 3, A(WHITE, 0.2));
-                if (cur.duration) cv.roundRect(GX + 30, py, Math.max(6, Math.min(1, pos / cur.duration) * pw), 6, 3, A(WHITE, 0.9));
-                cv.text(mmss(pos), GX + 30, py + 30, 15, A(WHITE, 0.6), { literal: true });
-                if (cur.duration) cv.text('-' + mmss(cur.duration - pos), GX + 30 + pw, py + 30, 15, A(WHITE, 0.6), { align: 'right', literal: true });
-                cv.text(fit(cv, 'Timing ' + (posVal !== null ? 'from the car' : 'estimated') + (offset() ? ', offset ' + (offset() > 0 ? '+' : '') + offset() + ' ms' : ''), 14, pw, { literal: true }), GX + 30, H - 56, 14, A(WHITE, 0.45), { literal: true });
+                let ty = y + s + 42, size = 30;
+                while (size > 22 && cv.textWidth(LyricsLib.fold(cur.title), size, B) > s) size -= 2;
+                cv.text(fit(cv, cur.title, size, s, B), x, ty, size, WHITE, B);
+                ty += 32;
+                const by = [cur.artist, cur.album].filter(Boolean).join('  ·  ');
+                cv.text(fit(cv, by, 21, s), x, ty, 21, G.withAlpha(WHITE, 0.66), { literal: true });
+                // the progress line, and the times under it
+                const py = ty + 26, pos = Math.max(0, position(now) - offset()), dur = cur.duration || 0;
+                cv.roundRect(x, py, s, 5, 2.5, G.withAlpha(WHITE, 0.22));
+                if (dur) cv.roundRect(x, py, Math.max(5, Math.min(1, pos / dur) * s), 5, 2.5, G.withAlpha(WHITE, 0.92));
+                cv.text(mmss(pos), x, py + 28, 15, G.withAlpha(WHITE, 0.6), { literal: true });
+                if (dur) cv.text('-' + mmss(dur - pos), x + s, py + 28, 15, G.withAlpha(WHITE, 0.6), { align: 'right', literal: true });
+                const state = !cur.playing ? 'PAUSED' : !clk ? 'TIMED FROM THE SONG CHANGE' : '';
+                if (state) cv.text(state, x + s / 2, py + 28, 13, G.withAlpha(WHITE, 0.55), { align: 'center', font: 'bold', spacing: 1.5, literal: true });
+                // no time from the car: the Sync button (here where the kit runs the screen, the bar's elsewhere)
+                if (!clk && cv.own) {
+                    const bw = 220, bx = x + (s - bw) / 2, bt = py + 44;
+                    cv.roundRect(bx, bt, bw, 46, 23, G.withAlpha(WHITE, 0.14));
+                    cv.strokeRoundRect(bx, bt, bw, 46, 23, 1, G.withAlpha(WHITE, 0.3));
+                    cv.text('SONG JUST STARTED', bx + bw / 2, bt + 29, 15, WHITE, { align: 'center', font: 'bold', spacing: 1.5, literal: true });
+                    FS.button(cv, 'sync', bx, bt, bw, 46, sync, { r: 23 });
+                }
             }
-            function drawSynced(cv, lines, pos) {
-                const p = pos + LEAD_MS, i = LyricsLib.lineAt(lines, p);
-                const e = i >= 0 ? Math.max(0, Math.min(1, (p - lines[i].t) / SCROLL_MS)) : 1;
-                const sc = i >= 0 ? i - 1 + (1 - Math.pow(1 - e, 3)) : -1;
-                const top = 30, bottom = H - 30, cy = 200, LH = 66;
-                cv.clip(LX, top, LW + 40, bottom - top);
-                for (let j = Math.floor(sc) - 2; j <= Math.floor(sc) + 5; j++) {
-                    if (j < 0 || j >= lines.length) continue;
-                    const y = cy + (j - sc) * LH;
-                    if (y < top - 40 || y > bottom + 40) continue;
-                    const now = j === i, past = j < i, opt = { font: 'bold', literal: true };
-                    let size = now ? 44 : 38;
-                    const txt = lines[j].text || '·  ·  ·';
-                    while (size > 26 && cv.textWidth(txt, size, opt) > LW) size -= 2;
-                    const a = now ? 1 : past ? 0.22 : Math.max(0.18, 0.5 - (j - i - 1) * 0.08);
-                    cv.text(fit(cv, txt, size, LW, opt), LX, y + size * 0.35, size, A(WHITE, a), opt);
+
+            /* the lyrics' layout for a song: each line wrapped, and where it sits (cached; textWidth isn't free) */
+            let laid = null;          // { lines, w, blocks: [{ rows, top, h, gap }] }
+            function layout(cv, lines, w) {
+                if (laid && laid.lines === lines && laid.w === w) return laid;
+                const opt = { font: 'bold', literal: true }, blocks = [];
+                let y = 0;
+                lines.forEach((l) => {
+                    const rows = l.text ? wrap(cv, l.text, LYR.size, w, LYR.max, opt) : [];
+                    const h = rows.length ? rows.length * LYR.lh : LYR.lh;
+                    blocks.push({ rows: rows, top: y, h: h });
+                    y += h + LYR.gap;
+                });
+                laid = { lines: lines, w: w, blocks: blocks };
+                return laid;
+            }
+            let glide = { i: -2, from: 0, to: 0, at: 0, prev: -1 };    // the scroll to line i
+            function drawSynced(cv, Q, lines, now) {
+                const L = layout(cv, lines, Q.LW), B = L.blocks, p = position(now) + LEAD_MS, i = LyricsLib.lineAt(lines, p);
+                const target = B[Math.max(0, i)].top;
+                if (i !== glide.i) {
+                    const shown = glide.i === -2 ? target : scrollOf(glide, 0, now);
+                    glide = { i: i, from: shown, to: target, at: now, prev: glide.i };
+                }
+                const top = Q.A.y, bottom = Q.A.bottom, anchor = top + Math.round((bottom - top) * 0.3);
+                const fadeIn = easeOut((now - glide.at) / FADE_MS);
+                cv.clip(Q.LX - 20, top, W - (Q.LX - 20), bottom - top);
+                const first = Math.max(0, i - 3);
+                for (let j = first; j < B.length; j++) {
+                    const b = B[j], y = anchor + b.top - scrollOf(glide, Math.max(0, j - i), now);
+                    if (y > bottom + 20) break;
+                    if (y + b.h < top - 20) continue;
+                    // brightness: the line being sung full, the one before fading out, the rest faded; dimmer near the edges
+                    let a = j === i ? 0.34 + 0.66 * fadeIn : j === glide.prev && glide.prev >= 0 ? 1 - 0.66 * fadeIn : 0.34;
+                    if (j < i) a = Math.min(a, j === glide.prev ? a : 0.26);
+                    const edge = Math.min(1, (y + b.h - top) / 90, (bottom - y) / 120);
+                    a *= Math.max(0, edge);
+                    if (a <= 0.01) continue;
+                    if (!b.rows.length) { dots(cv, Q.LX, y, a, lines, j, p); continue; }
+                    cv.alpha(a);
+                    b.rows.forEach((row, k) => cv.text(row, Q.LX, y + k * LYR.lh + Math.round(LYR.size * 0.78), LYR.size, WHITE, { font: 'bold', literal: true }));
+                    cv.alpha(1);
                 }
                 cv.noclip();
             }
-            function drawPlain(cv, text) {
-                cv.text('LYRICS (NOT SYNCED)', LX, 60, 14, A(WHITE, 0.55), { font: 'bold', spacing: 1.5, literal: true });
-                text.filter(Boolean).slice(0, 7).forEach((s, k) => cv.text(fit(cv, s, 30, LW, { font: 'bold', literal: true }), LX, 110 + k * 52, 30, A(WHITE, k ? 0.55 : 1), { font: 'bold', literal: true }));
+            /** The scroll (px) of a line `lag` lines below the one being sung: each starts its glide a little later. */
+            function scrollOf(g, lag, now) {
+                return g.from + (g.to - g.from) * easeOut((now - g.at - Math.min(lag, 6) * STAGGER_MS) / GLIDE_MS);
             }
-            function message(cv, a, b) {
-                cv.text(a, LX, 230, 38, WHITE, { font: 'bold', literal: true });
-                if (b) cv.text(fit(cv, b, 22, LW), LX, 280, 22, A(WHITE, 0.65), { literal: true });
+            /** An instrumental break: three dots that fill up as the next line comes closer. */
+            function dots(cv, x, y, a, lines, j, p) {
+                const t0 = lines[j].t, t1 = j + 1 < lines.length ? lines[j + 1].t : t0 + 4000, f = Math.max(0, Math.min(1, (p - t0) / Math.max(1, t1 - t0)));
+                for (let k = 0; k < 3; k++) {
+                    const fk = Math.max(0, Math.min(1, f * 3 - k));
+                    cv.circle(x + 12 + k * 34, y + LYR.lh / 2, 10 + fk * 2, G.withAlpha(WHITE, a * (0.35 + 0.65 * fk)));
+                }
             }
-            let probe = false;            // the Probe view is on (it shares this screen)
-            ctx.loop('MAIN', 10, guard('main', async () => {
+            function drawPlain(cv, Q, text) {
+                cv.text('LYRICS (NOT SYNCED TO THE SONG)', Q.LX, Q.A.y + 34, 14, G.withAlpha(WHITE, 0.6), { font: 'bold', spacing: 1.5, literal: true });
+                let y = Q.A.y + 80;
+                text.filter(Boolean).some((s, k) => {
+                    const rows = wrap(cv, s, 32, Q.LW, 2, { font: 'bold', literal: true });
+                    if (y + rows.length * 42 > Q.A.bottom) return true;
+                    rows.forEach((r) => { cv.text(r, Q.LX, y, 32, G.withAlpha(WHITE, k ? 0.6 : 1), { font: 'bold', literal: true }); y += 42; });
+                    y += 12;
+                    return false;
+                });
+            }
+            function message(cv, Q, a, b) {
+                const y = Q.A.y + Math.round(Q.A.h * 0.42);
+                cv.text(fit(cv, a, 40, Q.LW, { font: 'bold' }), Q.LX, y, 40, WHITE, { font: 'bold', literal: true });
+                if (b) wrap(cv, b, 22, Q.LW, 2).forEach((r, k) => cv.text(r, Q.LX, y + 46 + k * 30, 22, G.withAlpha(WHITE, 0.66), { literal: true }));
+            }
+
+            ctx.loop('MAIN', 2, guard('main', async () => {
                 if (probe) { await drawProbe(); return; }
-                const cv = ctx.canvas(W, H);
+                // one clock for the frame in FRAME_MS steps: a frame like the last one isn't sent again
+                const now = Math.floor(Date.now() / FRAME_MS) * FRAME_MS;
+                const cv = ctx.canvas(W, H), A = FS.area(cv), fullH = H + (cv.extra || 0);
+                if (cv.chrome) G.frame(cv, ctx.theme(), ['Lyrics', 'Probe'], 0, []);
                 if (!cur) follow();
                 if (!cur) {
-                    const P = palette('Car Lyrics');
-                    backdrop(cv, P);
-                    glass(cv, 300, 140, W - 600, 240, 28);
-                    cv.text('Play a song on your phone', W / 2, 240, 38, WHITE, { font: 'bold', align: 'center', literal: true });
-                    cv.text('Looking for the track in the car\'s data. If nothing shows up, open Probe and send a photo of it.', W / 2, 290, 20, A(WHITE, 0.65), { align: 'center', literal: true });
+                    const P = nameColours('Car Lyrics');
+                    backdrop(cv, null, now, P, fullH);
+                    const cy = A.y + A.h / 2;
+                    cv.text('Play a song on your phone', W / 2, cy - 6, 40, WHITE, { font: 'bold', align: 'center', literal: true });
+                    cv.text('Apple Music over CarPlay, or any app over Bluetooth. The lyrics show up here.', W / 2, cy + 40, 21, G.withAlpha(WHITE, 0.66), { align: 'center', literal: true });
                 } else {
-                    const P = palette(cur.title + cur.artist);
-                    backdrop(cv, P);
-                    nowPlaying(cv, P);
+                    const P = nameColours(cur.title + cur.artist), a = artFor(), Q = geo(A);
+                    backdrop(cv, a, now, P, fullH);
+                    coverColumn(cv, Q, a, P, now);
                     const lyr = lyrics.get({ title: cur.title, artist: cur.artist, album: cur.album, duration: cur.duration });
-                    if (lyr.state === 'synced') drawSynced(cv, lyr.lines, position());
-                    else if (lyr.state === 'plain') drawPlain(cv, lyr.text);
-                    else if (lyr.state === 'loading') message(cv, 'Finding the lyrics...', '');
-                    else if (lyr.state === 'instrumental') message(cv, 'Instrumental', 'Nothing to sing along to.');
-                    else if (lyr.state === 'error') message(cv, 'Can\'t reach LRCLIB', net.online() ? 'Trying again in a moment.' : 'The car is offline: Store > Settings > Wi-Fi, or a phone hotspot.');
-                    else if (lyr.state === 'undrawable') message(cv, 'Lyrics in letters this app can\'t draw yet', '');
-                    else message(cv, 'No lyrics for this song', 'LRCLIB has no entry for this title and artist.');
+                    if (lyr.state === 'synced' && lyr.lines.length) drawSynced(cv, Q, lyr.lines, now);
+                    else if (lyr.state === 'plain') drawPlain(cv, Q, lyr.text);
+                    else if (lyr.state === 'loading') message(cv, Q, 'Finding the lyrics...', '');
+                    else if (lyr.state === 'instrumental') message(cv, Q, 'Instrumental', 'Nothing to sing along to.');
+                    else if (lyr.state === 'error') message(cv, Q, 'Can\'t reach the lyrics', net.online() ? 'Trying again in a moment.' : 'The car is offline: turn on Wi-Fi in the Store\'s settings, or connect to a phone hotspot.');
+                    else if (lyr.state === 'undrawable') message(cv, Q, 'Lyrics in letters this app can\'t draw yet', '');
+                    else message(cv, Q, 'No lyrics for this song', 'LRCLIB has no lyrics for this title and artist yet.');
                 }
                 if (toast && Date.now() < toast.until) {
-                    const w = cv.textWidth(toast.text, 22, { literal: true }) + 60;
-                    cv.roundRect((W - w) / 2, H - 70, w, 48, 24, A([20, 20, 24], 0.85));
-                    cv.strokeRoundRect((W - w) / 2, H - 70, w, 48, 24, 1, A(WHITE, 0.2));
-                    cv.text(toast.text, W / 2, H - 39, 22, WHITE, { align: 'center', literal: true });
+                    const s = fit(cv, toast.text, 22, 1000), w = cv.textWidth(s, 22, { literal: true }) + 64, ty = A.bottom - 64;
+                    cv.roundRect((W - w) / 2, ty, w, 50, 25, '#000000c0');
+                    cv.strokeRoundRect((W - w) / 2, ty, w, 50, 25, 1, G.withAlpha(WHITE, 0.25));
+                    cv.text(s, W / 2, ty + 32, 22, WHITE, { align: 'center', literal: true });
                 }
                 await ui.image('MAIN_GFX', cv);
             }));
@@ -211,38 +335,36 @@ mgu.run({
                 let line = '';
                 if (lyr.state === 'synced') { const i = LyricsLib.lineAt(lyr.lines, position() + LEAD_MS); line = i >= 0 ? lyr.lines[i].text : ''; }
                 return { label: 'Now playing', value: cur.title, sub: line || cur.artist, sub2: line ? cur.artist : '',
-                    bar: cur.duration ? position() / cur.duration : null, small: [cur.title, line || cur.artist] };
+                    bar: cur.duration ? (position() - offset()) / cur.duration : null, small: [cur.title, line || cur.artist] };
             }, { fps: 1 });
 
             /*
-             * PROBE: everything the car reports, shown in the main screen (a second screen of its own drew over
-             * this one on iDrive 7, and the two flashed). Probe switches between the lyrics and the probe.
+             * PROBE: everything the car reports (the Probe tab; the Probe bar button where the kit can't run the
+             * screen). Pages: the values, the media interfaces in the catalog, the subscriptions.
              */
             let page = 0, vpage = 0;
             const PAGES = ['Values the car sends', 'Media interfaces in the catalog', 'Subscriptions'];
             const PROBE_BTNS = ['BTN_PAGE', 'BTN_MORE', 'BTN_SAVE'];
-            const shown = (id, on) => {
-                const D = ctx.display;
-                ui.visible(id, on && !(D && D.hmiBarHidden));
-                if (D && D.ownHidden) {
-                    if (on) D.ownHidden.delete(id); else D.ownHidden.add(id);
-                    D._btns = null;
-                    if (D.place && typeof D._place === 'function') D._place();
-                }
-            };
-            const showButtons = () => {
-                PROBE_BTNS.forEach((b) => shown(b, probe));
-                shown('BTN_SYNC', !probe);
+            // the bar's buttons (software renderer only: where the kit runs the screen they are hidden anyway)
+            let shownKey = '';
+            const showButtons = (force) => {
+                const key = probe + '|' + !!clk;
+                if (key === shownKey && !force) return;
+                shownKey = key;
+                PROBE_BTNS.forEach((b) => ui.visible(b, probe));
+                ui.visible('BTN_SYNC', !probe && !clk);
                 ui.text('BTN_PROBE', probe ? 'Lyrics' : 'Probe');
             };
-            ctx.onLayout(guard('layout', () => showButtons()));
+            ctx.onLayout(guard('layout', () => showButtons(true)));
             showButtons();
+            setInterval(guard('buttons', showButtons), 3000);
             ui.onClick('BTN_PROBE', guard('probe', () => { probe = !probe; page = 0; vpage = 0; showButtons(); }));
-            ui.onClick('BTN_PAGE', guard('page', () => { page = (page + 1) % PAGES.length; vpage = 0; }));
+            const nextPage = () => { page = (page + 1) % PAGES.length; vpage = 0; };
+            ui.onClick('BTN_PAGE', guard('page', nextPage));
             ui.onClick('BTN_MORE', guard('more', () => { vpage++; }));
             const report = () => {
                 const L = ['Car Lyrics ' + VERSION + ' probe, ' + new Date().toISOString(), ''];
-                L.push('== track picked: ' + (cur ? JSON.stringify(cur) : 'none'), '');
+                L.push('== track picked: ' + (cur ? JSON.stringify(cur) : 'none') + (clk ? ', clock ' + JSON.stringify(clk) : ', no time from the car'), '');
                 L.push('== subscriptions');
                 np.status().forEach((s) => L.push(s.iface + ' / ' + s.instance + ': ' + (s.available ? 'available' : 'not available') + ', ' + s.fields + ' fields' + (s.error ? ', error ' + s.error : '')));
                 L.push('', '== values (newest first)');
@@ -260,15 +382,18 @@ mgu.run({
                 fs.writeFileSync(reportFile, r);
                 return true;
             };
-            ui.onClick('BTN_SAVE', guard('save', () => { saveReport(); say('Saved to ' + reportFile, 5000); }));
+            const saveNow = () => { saveReport(); say('Saved to ' + reportFile, 5000); };
+            ui.onClick('BTN_SAVE', guard('save', saveNow));
             setInterval(guard('report', () => { if (np.values().length) saveReport(); }), REPORT_MS);
 
             // the values that say most about what is playing first: metadata, item, title, state, time
             const RANK = /metadata|item|title|artist|album|state|time|track|song/i;
             async function drawProbe() {
-                const t = ctx.theme(), cv = ctx.canvas(W, H).clear(t.bg), PER = 17;
-                cv.text(PAGES[page] + '  (' + (page + 1) + '/' + PAGES.length + ')', 40, 44, 26, t.text, { font: 'bold', literal: true });
-                cv.text(cur ? 'Track: "' + cur.title + '" by "' + cur.artist + '"' : 'Track: not found yet', W - 40, 44, 18, t.dim, { align: 'right', literal: true });
+                const t = ctx.theme(), cv = ctx.canvas(W, H).clear(t.bg), A = FS.area(cv);
+                G.frame(cv, t, cv.chrome ? ['Lyrics', 'Probe'] : ['Car Lyrics: probe'], cv.chrome ? 1 : 0, []);
+                const PER = Math.max(8, Math.floor((A.h - 120) / 24));
+                cv.text(PAGES[page] + '  (' + (page + 1) + '/' + PAGES.length + ')', A.x + 16, A.y + 30, 26, t.text, { font: 'bold', literal: true });
+                cv.text(fit(cv, cur ? 'Track: "' + cur.title + '" by "' + cur.artist + '"' + (clk ? ', time from the car' : '') : 'Track: not found yet', 18, 760), A.right - 16, A.y + 30, 18, t.dim, { align: 'right', literal: true });
                 let rows = [];
                 if (page === 0) {
                     const v = np.values().slice().sort((a, b) => (RANK.test(b.key) ? 1 : 0) - (RANK.test(a.key) ? 1 : 0) || b.changes - a.changes || b.at - a.at);
@@ -283,16 +408,25 @@ mgu.run({
                     rows.push('', 'Report file: ' + reportFile, 'Online: ' + (net.online() ? 'yes' : 'no (lyrics need the Store\'s internet)'));
                 }
                 const pages = Math.max(1, Math.ceil(rows.length / PER)), pg = vpage % pages;
-                rows.slice(pg * PER, pg * PER + PER).forEach((r, k) => cv.text(fit(cv, r, 20, W - 80, { literal: true }), 40, 86 + k * 24, 20, k % 2 ? t.dim : t.text, { literal: true }));
-                if (pages > 1) cv.text('Page ' + (pg + 1) + ' of ' + pages + ' (More)', W - 40, H - 14, 16, t.dim, { align: 'right', literal: true });
-                if (toast && Date.now() < toast.until) cv.text(toast.text, 40, H - 14, 16, t.accent2 || t.text, { literal: true });
+                rows.slice(pg * PER, pg * PER + PER).forEach((r, k) => cv.text(fit(cv, r, 19, A.w - 32), A.x + 16, A.y + 66 + k * 24, 19, k % 2 ? t.dim : t.text, { literal: true }));
+                // the page's buttons where the kit runs the screen
+                if (cv.own) {
+                    const bw = 200, bh = 52, by = A.bottom - bh;
+                    [['Next page', nextPage], ['More', () => { vpage++; }], ['Save report', saveNow]].forEach((b, k) => {
+                        const bx = A.right - (3 - k) * (bw + 14);
+                        cv.roundRect(bx, by, bw, bh, 14, G.withAlpha(WHITE, 0.07));
+                        cv.strokeRoundRect(bx, by, bw, bh, 14, 1, G.withAlpha(WHITE, 0.2));
+                        cv.text(b[0].toUpperCase(), bx + bw / 2, by + 33, 17, t.text, { align: 'center', font: 'bold', spacing: 1.5, literal: true });
+                        FS.button(cv, 'probe' + k, bx, by, bw, bh, guard('probe button', b[1]), { r: 14, slop: 6 });
+                    });
+                }
+                cv.text((pages > 1 ? 'Page ' + (pg + 1) + ' of ' + pages + (cv.own ? '' : ' (More)') : '') + (toast && Date.now() < toast.until ? '   ' + toast.text : ''), A.x + 16, A.bottom - 18, 16, t.dim, { literal: true });
                 await ui.image('MAIN_GFX', cv);
             }
 
             /* ---------- start: the catalog (one read), then the subscriptions ---------- */
             catalog = NP.scanCatalog();
             log.info('catalog: ' + (catalog.error ? 'error ' + catalog.error : catalog.total + ' interfaces, ' + catalog.hits.length + ' look like media'));
-            catalog.hits.forEach((h) => log.info('catalog: ' + h.iface + ': ' + h.words.join(', ')));
             np.start().then(() => log.info('subscribed: ' + JSON.stringify(np.status())), (e) => log.error('nowplaying start: ' + (e && e.stack || e)));
             log.info('started ' + VERSION);
         } catch (e) {

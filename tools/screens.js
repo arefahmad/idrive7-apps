@@ -20,6 +20,26 @@ const { Canvas } = require(path.join(RUNTIME, 'canvas'));
 const { Recorder, play } = require(path.join(RUNTIME, 'record'));
 const themes = require(path.join(RUNTIME, 'themes'));
 
+/* the GPU renderer draws scaled pictures filtered: do the same here (bilinear) so the shots look as on the car */
+Canvas.prototype.drawImage = function (src, sw, sh, x, y, w, h) {
+    const x0 = Math.max(0, Math.round(x)), y0 = Math.max(0, Math.round(y)), x1 = Math.min(this.w, Math.round(x + w)), y1 = Math.min(this.h, Math.round(y + h));
+    const d = this.d, fx = sw / w, fy = sh / h;
+    for (let py = y0; py < y1; py++) {
+        const sy = Math.max(0, Math.min(sh - 1.001, (py - y + 0.5) * fy - 0.5)), ya = sy | 0, wy = sy - ya, yb = Math.min(sh - 1, ya + 1);
+        for (let px = x0; px < x1; px++) {
+            const sx = Math.max(0, Math.min(sw - 1.001, (px - x + 0.5) * fx - 0.5)), xa = sx | 0, wx = sx - xa, xb = Math.min(sw - 1, xa + 1), di = (py * this.w + px) * 4;
+            const v = [0, 0, 0, 0];
+            for (let c = 0; c < 4; c++) {
+                const p = (yy, xx) => { const q = src[(yy * sw + xx) * 4 + c]; return q === undefined ? 255 : q; };
+                v[c] = (p(ya, xa) * (1 - wx) + p(ya, xb) * wx) * (1 - wy) + (p(yb, xa) * (1 - wx) + p(yb, xb) * wx) * wy;
+            }
+            const k = v[3] / 255, q = 1 - k;
+            d[di] = v[0] * k + d[di] * q; d[di + 1] = v[1] * k + d[di + 1] * q; d[di + 2] = v[2] * k + d[di + 2] * q; d[di + 3] = 255;
+        }
+    }
+    return this;
+};
+
 /* ---------- module stand-ins ---------- */
 const stubs = {};          // './kit/<name>' -> exports
 let appDir = '';
@@ -64,7 +84,12 @@ function harness(id, opts) {
         log: { info() {}, warn() {}, error(m) { console.error(id + ': ' + m); }, debug() {} },
         settings: { get: (k) => values[k], set: (k, v) => { values[k] = v; }, onChange() {} },
         theme: () => themes.theme(values.theme),
-        canvas: (w, h) => new Recorder(w, h),   // what the car gives an app to draw on: a recording
+        canvas: (w, h) => {                     // what the car gives an app to draw on: a recording
+            const r = new Recorder(w, h);
+            if (opts.own) { r.own = true; r.place = { scale: opts.own.scale, ox: opts.own.ox, oy: opts.own.oy, full: true }; r.extra = opts.own.extra; r.chrome = { tabs: null }; }
+            return r;
+        },
+        hideButton() {}, onTab: (fn) => { ctx.tab = fn; },
         onLayout: (fn) => layout.push(fn),
         signals: opts.signals || { watch: () => Promise.resolve({ available: false, error: 'PC' }), loadConfig: () => { throw new Error('PC'); } },
         loop: (name, fps, fn) => { loops[name] = fn; return { stop() {}, kick() {} }; },
@@ -91,8 +116,14 @@ function harness(id, opts) {
         },
         async shot(screen, file) {
             await loops[screen]();
-            const rec = images[screen + '_GFX'], cv = new Canvas(rec.w, rec.h);
+            const rec = images[screen + '_GFX'], extra = rec.extra || 0;
+            let cv = new Canvas(rec.w, rec.h + extra);
             play(rec.words(), cv);                // played back into pixels, as the car does without the GPU renderer
+            if (rec.own) {                        // the part full-screen mode shows (display.js FULL.src)
+                const out = new Canvas(1576, rec.h + extra - 38);
+                for (let y = 0; y < out.h; y++) out.d.set(cv.d.subarray(((y + 38) * cv.w + 12) * 4, ((y + 38) * cv.w + 12 + 1576) * 4), y * out.w * 4);
+                cv = out;
+            }
             const out = path.join(ROOT, 'docs', 'screenshots', id);
             fs.mkdirSync(out, { recursive: true });
             fs.writeFileSync(path.join(out, file), cv.png(9));
@@ -111,7 +142,8 @@ function carStub(d) {
 
 const DAY = 86400000, NOW = Date.UTC(2026, 10, 6, 23, 30);
 const realNow = Date.now;
-Date.now = () => NOW;
+let later = 0;                 // ms the clock has moved on (animations)
+Date.now = () => NOW + later;
 const tick = (s) => NOW - s * 1000;
 
 async function carCare() {
@@ -187,25 +219,36 @@ async function faultWatch() {
 }
 
 async function carLyrics() {
-    // made-up lyrics for a made-up song: nothing here is anyone's work
-    const lrc = ['[00:10.00]Headlights on the empty road', '[00:14.50]Counting every mile we owe', '[00:19.00]Radio low, the windows down',
-        '[00:23.50]Leaving all the lights of town', '[00:28.00]', '[00:31.00]And the night keeps rolling on', '[00:35.50]Like the last line of a song'].join('\n');
+    // made-up lyrics for a made-up song, and a made-up cover (test/fixtures/cover_demo.jpg): nobody's work
+    const lrc = ['[00:10.00]Headlights on the empty road', '[00:14.50]Counting every mile we owe', '[00:19.00]Radio low, the windows down and the city fading in the mirror',
+        '[00:23.50]Leaving all the lights of town', '[00:28.00]', '[00:31.00]And the night keeps rolling on', '[00:35.50]Like the last line of a song',
+        '[00:40.00]Hold on, hold on', '[00:44.00]We were never meant to stay'].join('\n');
+    const meta = [{ key: 'TITLE', value: { stringValue: 'Night Drive' } }, { key: 'ARTIST', value: { stringValue: 'Sample Artist' } }, { key: 'ALBUM', value: { stringValue: 'Demo Tapes' } }];
     const signals = {
-        loadConfig: () => ({ instances: ['Inst1'], fields: { nowPlaying: {}, playbackPosition: {} } }),
-        watch: (iface, inst, handlers) => {
-            if (/CarPlay/.test(iface)) { handlers.nowPlaying({ title: 'Night Drive', artist: 'Sample Artist', album: 'Demo Tapes', duration: 212 }); handlers.playbackPosition(24); }
+        loadConfig: (iface) => (/MediaPlayer$/.test(iface) ? { instances: ['CarPlayMedia'], fields: { currentItemMetadata: {}, currentItemTime: {}, playerState: {}, playbackSpeed: {} } } : { instances: [], fields: {} }),
+        watch: (iface, inst, h) => {
+            if (inst === 'CarPlayMedia') { h.currentItemMetadata(meta); h.currentItemTime({ elapsed: 24900, total: 212000 }); h.playerState('PLAYER_STATE_PLAY'); h.playbackSpeed(1000); }
             return Promise.resolve({ available: true, error: null });
         },
     };
-    stubs['./http'] = { client: () => ({ online: () => true, request: () => Promise.resolve({ status: 200, body: Buffer.from(JSON.stringify({ syncedLyrics: lrc })) }) }) };
-    const h = harness('aref_carlyrics', { signals });
+    const cover = fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'cover_demo.jpg'));
+    stubs['./http'] = { client: () => ({ online: () => true, request: (m, host) => {
+        if (host === 'itunes.apple.com') return Promise.resolve({ status: 200, body: Buffer.from(JSON.stringify({ results: [{ trackName: 'Night Drive', artistName: 'Sample Artist', artworkUrl100: 'https://is1-ssl.mzstatic.com/x/100x100bb.jpg' }] })) });
+        if (host === 'lrclib.net') return Promise.resolve({ status: 200, body: Buffer.from(JSON.stringify({ syncedLyrics: lrc })) });
+        return Promise.resolve({ status: 200, body: cover });
+    } }) };
+    // as the car's full-screen mode shows the page (display.js, 1920 x 720 screen): scaled 1.165, 53 px more below
+    const h = harness('aref_carlyrics', { signals, own: { scale: 1.165, ox: 70, oy: 36, extra: 53 } });
     await h.ready();
-    await h.shot('MAIN', 'lyrics.png');           // the first frame starts the lookup
-    await new Promise((r) => setTimeout(r, 50));
+    await h.shot('MAIN', 'lyrics.png');           // the first frame starts the lookups
+    await new Promise((r) => setTimeout(r, 400));
+    await h.shot('MAIN', 'lyrics.png');           // the line lights up: a moment later
+    later = 1000;
     await h.shot('MAIN', 'lyrics.png');
-    h.clicks.BTN_PROBE();
+    later = 0;
+    h.ctx.tab(1);
     await h.shot('MAIN', 'probe.png');
-    h.clicks.BTN_PROBE();
+    h.ctx.tab(0);
     await h.widget('widget.png');
     delete stubs['./http'];
 }

@@ -3,30 +3,34 @@
 Synced lyrics for whatever the car is playing: Apple Music over CarPlay, Bluetooth or USB. No Spotify
 account and no app on the phone.
 
-Version 0.2.4 · iDrive 7 · package `aref_carlyrics` · [all apps and how to install](../../README.md)
-
-> [!WARNING]
-> **Experimental.** Which interface and field carry the CarPlay track on iDrive 7 isn't documented. This
-> version finds it at run time and doubles as a probe. If the main screen stays on "Play a song on your
-> phone", open **Probe** and share what it shows (see below).
+Version 0.3.0 · iDrive 7 · package `aref_carlyrics` · [all apps and how to install](../../README.md)
 
 ## Who it's for
 
 Apple Music listeners. G's Music shows synced lyrics, but it plays through Spotify's Web API and needs
 Spotify Premium. Apple offers no API for another device to read or control what an iPhone is playing.
-Car Lyrics takes the track from the head unit instead: the car already receives the title and artist
-from CarPlay and Bluetooth to show them in its own media screens.
+Car Lyrics takes the track from the head unit instead: the car already receives the title, artist and
+time in the song from CarPlay to show them in its own media screens.
 
 ## What it does
 
-- **Main screen:** a glass design in the song's own colours: a frosted now-playing panel (title, artist,
-  album, progress and times) and the lyrics beside it, bold and left-aligned, the current line in full
-  white and the others faded, as Apple Music shows them.
-- **Lyrics:** from [LRCLIB](https://lrclib.net), a free, open database of synced lyrics. Needs internet
-  through the Store's uplink (Wi-Fi or a phone hotspot).
-- **Song just started:** when the car doesn't report the playback position, the app times the song from
-  when it changes. Tap this to sync it.
+- **Full screen, Apple Music style:** the album art blurred behind the whole page and drifting slowly,
+  the cover with the title, artist and a progress line on the left, and the lyrics on the right: big and
+  bold, the line being sung bright and the others faded, gliding up line by line. Instrumental breaks
+  show three dots that fill up until the next line.
+- **Timing from the car:** CarPlay sends the time in the song about once a second. The app runs its own
+  clock between those updates, so the lyrics move smoothly, and it stops when you pause. Skips, seeks
+  and new songs are picked up on their own.
+- **Album art:** from Apple's iTunes Search API, the same artwork Apple Music shows (the car doesn't pass
+  CarPlay's artwork on to apps).
+- **Lyrics:** from [LRCLIB](https://lrclib.net), a free, open database of synced lyrics.
 - **Lyrics timing** (Settings): moves the lyrics up to 3 s earlier or later.
+- **Song just started:** only for a source that sends no time (some Bluetooth players). Tap it when the
+  song starts to sync the lyrics.
+
+Needs internet through the Store's uplink (Wi-Fi or a phone hotspot), for the lyrics and the artwork.
+Full screen needs the GPU renderer that G's Dash and G's Music use. Without it, the page shows in the
+standard frame with the HMI's buttons.
 
 ## Screens
 
@@ -36,13 +40,13 @@ Screens rendered on a PC from the app's own drawing code with made-up data (`too
 
 ![Lyrics](../../docs/screenshots/aref_carlyrics/lyrics.png)
 
-The glass design: each song gets its own colours. The song and lyrics here are made up.
+The song, its cover and its lyrics here are made up.
 
 ### Probe
 
 ![Probe](../../docs/screenshots/aref_carlyrics/probe.png)
 
-Every value the car sends from the CarPlay and media interfaces.
+The **Probe** tab: every value the car sends from the CarPlay and media interfaces.
 
 ### Home-screen widget
 
@@ -52,8 +56,10 @@ Add it to the iDrive home screen like BMW's own widgets: the song and the lyric 
 
 ## The probe
 
-It subscribes to every field of BMW's `CarPlayManager`, `MediaPlayer`, `HmiMediaState` and `DynamicMediaPlayer` interfaces and picks the
-track out by field name. The **Probe** screen has three pages:
+The track comes from BMW's `MediaPlayer` interface (CarPlay is its instance `CarPlayMedia`):
+`currentItemMetadata` for the title, artist and album, `currentItemTime` for the time in the song, and
+`playerState` for play and pause. The app also subscribes to every field of `CarPlayManager`,
+`HmiMediaState` and `DynamicMediaPlayer`, for other sources. The **Probe** screen has three pages:
 
 - **Values the car sends:** every field and its latest value.
 - **Media interfaces in the catalog:** interfaces in the unit's SOME/IP catalog whose definitions name a
@@ -70,4 +76,6 @@ draws only on the centre screen.
 
 ## Credits
 
-The lyrics client (`stage/lyrics.js`) is from nickgcode's G's Music (MIT).
+The lyrics client (`stage/lyrics.js`) and the artwork resampling are from nickgcode's G's Music (MIT).
+The JPEG decoder (`vendor/jpeg_decoder.js`) is jpeg-js (BSD-3-Clause) with pdf.js's decoder core
+(Apache 2.0), as vendored in G's Music. See `LICENSE`.

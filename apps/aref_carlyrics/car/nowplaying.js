@@ -42,6 +42,8 @@ const NOT_TITLE = /(album|artist|station|folder|playlist|device|app|source|servi
 const CATALOG_WORDS = /(title|artist|album|nowplaying|metadata|trackinfo|songinfo|interpret)/i;
 // fields that name titles that are not playing
 const SKIP_FIELD = /^(prev|next|playlist|history|queue|browse|search|list)/i;
+// fields whose "position" is a place in a list (currentItemPosition = { position: 3, totalNumber: 20 }), not a time
+const NOT_TIME_FIELD = /(itemposition|listposition|index|number|count)/i;
 
 function shortName(iface) { return iface.split('.').pop(); }
 
@@ -197,7 +199,7 @@ class NowPlaying {
                 const handlers = {};
                 fields.forEach((f) => { handlers[f] = (v) => this._put(d.iface, inst, f, v); });
                 try {
-                    const sub = await this.signals.watch(d.iface, inst, handlers, this.log, { pollMs: 5000 });
+                    const sub = await this.signals.watch(d.iface, inst, handlers, this.log, { pollMs: 30000 });
                     row.sub = sub;
                     row.error = sub && sub.error ? sub.error : '';
                 } catch (e) {
@@ -226,8 +228,48 @@ class NowPlaying {
         this.onChangeFns.forEach((fn) => { try { fn(key); } catch (e) { this.log.warn('nowplaying onChange: ' + e.message); } });
     }
 
+    /**
+     * The track from BMW's MediaPlayer as it reports it (CarPlay included: instance CarPlayMedia), or null:
+     * currentItemMetadata [{ key: 'TITLE', value: { stringValue } }...], currentItemTime { elapsed, total }
+     * in ms, playerState PLAYER_STATE_PLAY / _PAUSE / _STOP. The instance that plays wins, CarPlay first.
+     */
+    player() {
+        const groups = new Map();       // "Iface/inst" -> { meta, time, state, speed }
+        this.store.forEach((e, key) => {
+            const g = key.slice(0, key.lastIndexOf('.'));
+            if (!groups.has(g)) groups.set(g, { from: g });
+            const o = groups.get(g);
+            if (e.field === 'currentItemMetadata') { o.meta = normalize(e.value); o.metaAt = e.at; o.metaKey = key; }
+            else if (e.field === 'currentItemTime') { o.time = e.value; o.timeAt = e.at; }
+            else if (e.field === 'playerState') o.state = String(e.value);
+            else if (e.field === 'playbackSpeed') o.speed = Number(e.value);
+        });
+        let best = null;
+        groups.forEach((o) => {
+            const m = o.meta;
+            if (!m || typeof m !== 'object' || Array.isArray(m)) return;
+            const pick = (re) => { const k = Object.keys(m).filter((x) => re.test(x))[0]; return k && typeof m[k] === 'string' ? m[k].trim() : ''; };
+            const title = pick(/^title$/i);
+            if (!title) return;
+            const playing = /PLAY$/.test(o.state || '') && o.speed !== 0;
+            const t = o.time && typeof o.time === 'object' ? o.time : null;
+            const r = {
+                title: title, artist: pick(/^artist$/i), album: pick(/^album$/i), cover: pick(/^cover_?file$/i),
+                duration: t && t.total > 0 ? Number(t.total) : null,
+                position: t && t.elapsed >= 0 ? Number(t.elapsed) : null, positionAt: o.timeAt || o.metaAt,
+                playing: playing, state: o.state || '', at: Math.max(o.metaAt || 0, o.timeAt || 0), from: o.metaKey, direct: true,
+                score: (playing ? 20 : 0) + (/carplay|projected/i.test(o.from) ? 2 : 0),
+            };
+            if (r.duration && r.position !== null && r.duration < 36000 && r.position < 36000) { r.duration *= 1000; r.position *= 1000; }   // seconds (an older unit)
+            if (!best || r.score > best.score || (r.score === best.score && r.at > best.at)) best = r;
+        });
+        return best;
+    }
+
     /** The best track among every value seen, or null. */
     track() {
+        const direct = this.player();
+        if (direct) return direct;
         let best = null;
         this.store.forEach((e, key) => {
             // the previous and next items, playlists and queues name titles too: not what is playing
@@ -254,7 +296,7 @@ class NowPlaying {
         if (best.position === null) {
             const pre = best.from.slice(0, best.from.lastIndexOf('.'));
             this.store.forEach((e, key) => {
-                if (best.position !== null || key.indexOf(pre + '.') !== 0 || SKIP_FIELD.test(e.field)) return;
+                if (best.position !== null || key.indexOf(pre + '.') !== 0 || SKIP_FIELD.test(e.field) || NOT_TIME_FIELD.test(e.field)) return;
                 if (typeof e.value === 'number' && NAME.position.test(e.field)) best.position = posMs(e.value, best.duration);
                 else if (e.value && typeof e.value === 'object') {
                     leaves(normalize(e.value), '').forEach((l) => {

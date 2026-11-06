@@ -15,7 +15,7 @@ codes, clears or controls anything.
 | <img src="apps/aref_carcare/icon.png" width="40" alt=""> | **[Car Care](apps/aref_carcare/README.md)** | Your own service intervals (oil every 3,000 mi, plugs, coils, fluids, filters) by the car's odometer, kept apart from BMW's CBS. For owners who do their own oil changes but keep BMW's free services on a maintenance plan. |
 | <img src="apps/aref_drivelog/icon.png" width="40" alt=""> | **[Drive Log](apps/aref_drivelog/README.md)** | Every drive recorded in the background: distance, top speed, 0-60 mph, peak g and temperatures. Calibrates itself against a Dragy, then shows a Dragy-adjusted 0-60 without one. |
 | <img src="apps/aref_faultwatch/icon.png" width="40" alt=""> | **[Fault Watch](apps/aref_faultwatch/README.md)** | Background fault-memory scans and a timeline of what changed, each with the speed, gear, rpm and temperature at the time. For tracking down intermittent faults. |
-| <img src="apps/aref_carlyrics/icon.png" width="40" alt=""> | **[Car Lyrics](apps/aref_carlyrics/README.md)** | Synced lyrics for Apple Music over CarPlay, Bluetooth or USB, no Spotify needed. Experimental. |
+| <img src="apps/aref_carlyrics/icon.png" width="40" alt=""> | **[Car Lyrics](apps/aref_carlyrics/README.md)** | Full-screen synced lyrics for Apple Music over CarPlay, Bluetooth or USB, with album art. No Spotify needed. |
 | <img src="apps/aref_explorer/icon.png" width="40" alt=""> | **[Car Explorer](apps/aref_explorer/README.md)** | Finds the head unit's services behind a feature (ambient light, route guidance, GPS, climate...) and reports what each offers. For anyone asking "can an app do X on my car?" |
 
 ## Roadmap
@@ -58,7 +58,7 @@ Updates appear in the Store. To remove an app, remove it in the Store; its data 
   BMW's testers use.
 - **Centre screen only.** None of these apps draws over the instrument cluster or the HUD.
 - **No accounts and no cloud.** Data stays in each app's data folder on the head unit. Car Lyrics talks to
-  LRCLIB for lyrics and nothing else.
+  LRCLIB for lyrics and Apple's iTunes Search API for album art, and nothing else.
 
 ## For developers
 

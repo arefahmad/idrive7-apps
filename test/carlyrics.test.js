@@ -8,6 +8,12 @@ const path = require('path');
 const APP = path.join(__dirname, '..', 'apps', 'aref_carlyrics');
 const NP = require(path.join(APP, 'car', 'nowplaying.js'));
 const L = require(path.join(APP, 'stage', 'lyrics.js'));
+// app modules require each other as './name' (installed side by side on the car)
+const Module = require('module');
+const resolve0 = Module._resolveFilename;
+const FLAT = { './lyrics': path.join(APP, 'stage', 'lyrics.js'), './jpeg_decoder': path.join(APP, 'vendor', 'jpeg_decoder.js') };
+Module._resolveFilename = function (req) { return FLAT[req] || resolve0.apply(this, arguments); };
+const ART = require(path.join(APP, 'art', 'artwork.js'));
 
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
@@ -142,6 +148,85 @@ test('CarPlayMedia metadata as a real iDrive 7 sends it (key, value.stringValue)
     assert.strictEqual(tr.album, 'Trilogy');
     assert.strictEqual(tr.duration, 459707);
     assert.strictEqual(tr.position, 74237);
+});
+
+test('the time in the song is currentItemTime.elapsed, never currentItemPosition (a place in the playlist)', async () => {
+    const meta = [{ key: 'TITLE', value: { stringValue: 'Song' } }, { key: 'ARTIST', value: { stringValue: 'Artist' } }];
+    let h = null;
+    const signals = {
+        loadConfig: () => ({ instances: ['CarPlayMedia'], fields: { currentItemPosition: {}, currentItemMetadata: {}, currentItemTime: {}, playerState: {}, playbackSpeed: {} } }),
+        watch: async (iface, inst, handlers) => { h = handlers; return { available: true }; },
+    };
+    const np = new NP.NowPlaying(signals, { info() {}, warn() {}, error() {} }, [{ iface: 'x.MediaPlayer', instances: [] }]);
+    await np.start();
+    np.stop();
+    // the order the car sent them in: the list place first
+    h.currentItemPosition({ position: 0, totalNumber: 0 });
+    h.currentItemMetadata(meta);
+    h.currentItemTime({ elapsed: 89258, total: 459707 });
+    h.playerState('PLAYER_STATE_PLAY');
+    h.playbackSpeed(1000);
+    let t = np.track();
+    assert.strictEqual(t.position, 89258);
+    assert.strictEqual(t.duration, 459707);
+    assert.strictEqual(t.playing, true);
+    h.playerState('PLAYER_STATE_PAUSE');
+    t = np.track();
+    assert.strictEqual(t.playing, false);
+    // the generic finder (a source without MediaPlayer's fields) skips list places too
+    const np2 = new NP.NowPlaying(signals, { info() {}, warn() {}, error() {} }, []);
+    np2._put('x.Other', '1', 'nowPlaying', { title: 'A', artist: 'B' });
+    np2._put('x.Other', '1', 'currentItemPosition', { position: 3, totalNumber: 9 });
+    np2._put('x.Other', '1', 'trackTime', { elapsed: 42000, total: 200000 });
+    assert.strictEqual(np2.track().position, 42000);
+});
+
+test('a playing source wins over a stopped one with older metadata', async () => {
+    const np = new NP.NowPlaying({}, { info() {}, warn() {}, error() {} }, []);
+    np._put('x.MediaPlayer', 'Usb1', 'currentItemMetadata', [{ key: 'TITLE', value: { stringValue: 'Old USB song' } }]);
+    np._put('x.MediaPlayer', 'Usb1', 'playerState', 'PLAYER_STATE_STOP');
+    np._put('x.MediaPlayer', 'CarPlayMedia', 'currentItemMetadata', [{ key: 'TITLE', value: { stringValue: 'Now' } }]);
+    np._put('x.MediaPlayer', 'CarPlayMedia', 'playerState', 'PLAYER_STATE_PLAY');
+    assert.strictEqual(np.track().title, 'Now');
+});
+
+test('artwork: the right iTunes result, its 600 px link, and a cover and backdrop from a JPEG', () => {
+    const results = [
+        { trackName: 'Money Longer (Remix)', artistName: 'Someone Else', artworkUrl100: 'https://x/a/100x100bb.jpg' },
+        { trackName: 'Money Longer', artistName: 'Lil Uzi Vert', collectionName: 'Lil Uzi Vert vs. the World', artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/ab/source/100x100bb.jpg' },
+    ];
+    const best = ART.pick(results, { title: 'Money Longer', artist: 'Lil Uzi Vert' });
+    assert.strictEqual(best.artistName, 'Lil Uzi Vert');
+    assert.strictEqual(ART.sized(best.artworkUrl100, 600), 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/ab/source/600x600bb.jpg');
+    assert.strictEqual(ART.pick(results, { title: 'Other Song', artist: 'Nobody Here' }), null);
+    const a = new ART.Artwork(null, { info() {}, warn() {} });
+    const e = a.fromJpeg(fs.readFileSync(path.join(__dirname, 'fixtures', 'cover.jpg')));
+    assert.strictEqual(e.state, 'ready');
+    assert.strictEqual(e.cover.length, ART.ART_PX * ART.ART_PX * 4);
+    assert.strictEqual(e.blur.length, ART.BG_W * ART.BG_H * 4);
+    assert.strictEqual(e.cover[3], 0);                                   // a rounded corner is see-through
+    const mid = (ART.ART_PX / 2 * ART.ART_PX + ART.ART_PX / 2) * 4;
+    assert.strictEqual(e.cover[mid + 3], 255);
+    // the backdrop is dark enough for white text, and blue on the left, red on the right as the cover
+    const L0 = (ART.BG_H / 2 * ART.BG_W + 4) * 4, R0 = (ART.BG_H / 2 * ART.BG_W + ART.BG_W - 5) * 4;
+    assert.ok(e.blur[L0 + 2] > e.blur[L0] && e.blur[R0] > e.blur[R0 + 2]);
+    assert.ok(Math.max(e.blur[L0 + 2], e.blur[R0]) < 200);
+});
+
+test('artwork lookup goes through iTunes and caches the result', async () => {
+    const jpg = fs.readFileSync(path.join(__dirname, 'fixtures', 'cover.jpg')), calls = [];
+    const request = (m, host, p) => {
+        calls.push(host + p);
+        if (host === 'itunes.apple.com') return Promise.resolve({ status: 200, body: Buffer.from(JSON.stringify({ results: [{ trackName: 'Night Drive', artistName: 'Sample Artist', artworkUrl100: 'https://is1-ssl.mzstatic.com/image/x/100x100bb.jpg' }] })) });
+        return Promise.resolve({ status: 200, body: jpg });
+    };
+    const a = new ART.Artwork(request, { info() {}, warn() {} });
+    assert.strictEqual(a.get({ title: 'Night Drive', artist: 'Sample Artist' }).state, 'loading');
+    await new Promise((r) => setTimeout(r, 200));
+    const e = a.get({ title: 'Night Drive', artist: 'Sample Artist' });
+    assert.strictEqual(e.state, 'ready');
+    assert.strictEqual(e.ver, 1);
+    assert.deepStrictEqual(calls, ['itunes.apple.com/search?term=Night%20Drive%20Sample%20Artist&media=music&entity=song&limit=10', 'is1-ssl.mzstatic.com/image/x/600x600bb.jpg']);
 });
 
 test('LRC parsing and the line at a time', () => {
