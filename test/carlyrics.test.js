@@ -88,6 +88,32 @@ test('positions in seconds or ms against the duration', () => {
     assert.strictEqual(NP.trackIn('x', { title: 'A', artist: 'B', duration: 200, position: 30 }).position, 30000);
 });
 
+test('BMW-style metadata lists, item time, and previous/next items skipped', async () => {
+    const t = NP.trackIn('currentItemMetadata', [{ type: 'TITLE', value: 'Real Song' }, { type: 'ARTIST', value: 'Real Artist' }, { type: 'ALBUM', value: 'LP' }]);
+    assert.strictEqual(t.title, 'Real Song');
+    assert.strictEqual(t.artist, 'Real Artist');
+    assert.strictEqual(t.album, 'LP');
+    const signals = {
+        loadConfig: () => ({ instances: ['AndroidAutoProjected', 'CarPlayProjected'], fields: { nextItemMetadata: {}, currentItemMetadata: {}, currentItemTime: {} } }),
+        watch: async (iface, inst, h) => {
+            if (inst === 'CarPlayProjected') {
+                h.nextItemMetadata([{ type: 'TITLE', value: 'Next One' }, { type: 'ARTIST', value: 'Someone' }]);
+                h.currentItemMetadata([{ type: 'TITLE', value: 'Now Song' }, { type: 'ARTIST', value: 'Now Artist' }]);
+                h.currentItemTime({ elapsed: 30, total: 200 });
+            }
+            return { available: true };
+        },
+    };
+    const np = new NP.NowPlaying(signals, { info() {}, warn() {}, error() {} }, [{ iface: 'x.MediaPlayer', instances: [] }]);
+    await np.start();
+    const tr = np.track();
+    np.stop();
+    assert.strictEqual(tr.title, 'Now Song');
+    assert.strictEqual(tr.position, 30000);
+    assert.strictEqual(tr.duration, 200000);
+    assert.deepStrictEqual(NP.instancesOf({ instances: ['Usb1', 'AndroidAutoProjected', 'Bluetooth1', 'CarPlayProjected'] }), ['AndroidAutoProjected', 'CarPlayProjected', 'Bluetooth1', 'Usb1']);
+});
+
 test('LRC parsing and the line at a time', () => {
     const lines = L.parseLrc('[00:01.00]First\n[00:05.50]Second\n[00:10.00]Third');
     assert.strictEqual(lines.length, 3);

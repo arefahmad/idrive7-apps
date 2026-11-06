@@ -203,7 +203,9 @@ async function carLyrics() {
     await h.shot('MAIN', 'lyrics.png');           // the first frame starts the lookup
     await new Promise((r) => setTimeout(r, 50));
     await h.shot('MAIN', 'lyrics.png');
-    await h.shot('PROBE', 'probe.png');
+    h.clicks.BTN_PROBE();
+    await h.shot('MAIN', 'probe.png');
+    h.clicks.BTN_PROBE();
     await h.widget('widget.png');
     delete stubs['./http'];
 }

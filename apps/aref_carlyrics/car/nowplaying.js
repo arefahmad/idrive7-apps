@@ -23,7 +23,7 @@ const fs = require('fs');
 
 const CATALOG = '/etc/oap/someip/someip-interfaces.json';
 const MAX_FIELDS = 120;          // per interface instance
-const MAX_INSTANCES = 4;         // per interface
+const MAX_INSTANCES = 12;        // per interface (BMW's MediaPlayer has one per source: USB, Bluetooth, CarPlay...)
 const MAX_DEPTH = 5;             // into a field's struct
 const MAX_LEAVES = 60;           // per field value
 
@@ -33,13 +33,15 @@ const NAME = {
     title: /(title|songname|trackname|song|track)$/i,
     artist: /(artist|artistname|performer|interpret|singer)s?$/i,
     album: /album(name|title)?$/i,
-    duration: /(duration|length|totaltime|playtime_?total|totalduration)$/i,
+    duration: /(duration|length|totaltime|playtime_?total|totalduration|^total)$/i,
     position: /(position|elapsed|elapsedtime|currenttime|playtime|progress)$/i,
 };
 // names that are never the song's title (an album's, a station's, a folder's, an app's or a device's)
 const NOT_TITLE = /(album|artist|station|folder|playlist|device|app|source|service|genre|chapter|menu|window|screen|popup)/i;
 // words that make an interface worth a look in the catalog
 const CATALOG_WORDS = /(title|artist|album|nowplaying|metadata|trackinfo|songinfo|interpret)/i;
+// fields that name titles that are not playing
+const SKIP_FIELD = /^(prev|next|playlist|history|queue|browse|search|list)/i;
 
 function shortName(iface) { return iface.split('.').pop(); }
 
@@ -52,6 +54,9 @@ function instancesOf(cfg, fallback) {
     else if (typeof ins === 'string' && ins !== '*') list = [ins];
     list = list.filter((x) => typeof x === 'string' || typeof x === 'number').map(String).filter((x) => x && x !== '*');
     (fallback || []).forEach((f) => { if (list.indexOf(f) < 0) list.push(f); });
+    // the sources that can carry Apple Music first
+    const rank = (x) => (/carplay|apple|iap|projected/i.test(x) ? 0 : /bluetooth|bt|a2dp/i.test(x) ? 1 : 2);
+    list.sort((a, b) => rank(a) - rank(b));
     return list.slice(0, MAX_INSTANCES);
 }
 
@@ -59,6 +64,28 @@ function instancesOf(cfg, fallback) {
 function fieldsOf(cfg) {
     const f = (cfg && (cfg.fields || cfg.attributes)) || {};
     return (Array.isArray(f) ? f.map((x) => (x && x.name) || x) : Object.keys(f)).filter((x) => typeof x === 'string').slice(0, MAX_FIELDS);
+}
+
+/**
+ * Metadata lists as BMW's MediaPlayer may send them, [{ type: 'TITLE', value: 'x' }, ...], made into
+ * objects ({ TITLE: 'x' }) so the names match like any other field. Anything else is returned unchanged.
+ */
+function normalize(v, depth) {
+    depth = depth || 0;
+    if (!v || typeof v !== 'object' || Buffer.isBuffer(v) || depth > MAX_DEPTH) return v;
+    if (Array.isArray(v)) {
+        const keyOf = (x) => x && typeof x === 'object' && (x.type || x.key || x.name || x.attribute || x.id);
+        const valOf = (x) => (x.value !== undefined ? x.value : x.text !== undefined ? x.text : x.data !== undefined ? x.data : x.stringValue);
+        if (v.length && v.every((x) => typeof keyOf(x) === 'string' && valOf(x) !== undefined)) {
+            const o = {};
+            v.forEach((x) => { const k = keyOf(x); if (o[k] === undefined) o[k] = normalize(valOf(x), depth + 1); });
+            return o;
+        }
+        return v.map((x) => normalize(x, depth + 1));
+    }
+    const o = {};
+    Object.keys(v).forEach((k) => { o[k] = normalize(v[k], depth + 1); });
+    return o;
 }
 
 /** Every leaf (string, number, boolean) of a value: [[path, value]], at most MAX_LEAVES. */
@@ -98,7 +125,7 @@ function posMs(v, durMs) {
  * fieldName counts as the path's start (a field named "currentTitle" that is just a string).
  */
 function trackIn(fieldName, value) {
-    const L = leaves(value, '');
+    const L = leaves(normalize(value), '');
     const r = { title: '', artist: '', album: '', duration: null, position: null, score: 0 };
     L.forEach((e) => {
         const name = lastName(e[0] || fieldName), v = e[1];
@@ -197,6 +224,8 @@ class NowPlaying {
     track() {
         let best = null;
         this.store.forEach((e, key) => {
+            // the previous and next items, playlists and queues name titles too: not what is playing
+            if (SKIP_FIELD.test(e.field)) return;
             const t = trackIn(e.field, e.value);
             if (!t) return;
             // newer values win a tie: the source that is playing changes most
@@ -205,14 +234,24 @@ class NowPlaying {
             }
         });
         if (!best) return null;
+        // a duration in another field of the same interface instance (currentItemTime.total, say)
+        if (!best.duration) {
+            const pre0 = best.from.slice(0, best.from.lastIndexOf('.'));
+            this.store.forEach((e, key) => {
+                if (best.duration || key.indexOf(pre0 + '.') !== 0 || SKIP_FIELD.test(e.field)) return;
+                leaves(normalize(e.value), '').forEach((l) => {
+                    if (!best.duration && typeof l[1] === 'number' && l[1] > 0 && NAME.duration.test(lastName(l[0] || e.field))) best.duration = toMs(l[1]);
+                });
+            });
+        }
         // a position in another field of the same interface instance (a struct of its own, ticking)
         if (best.position === null) {
             const pre = best.from.slice(0, best.from.lastIndexOf('.'));
             this.store.forEach((e, key) => {
-                if (best.position !== null || key.indexOf(pre + '.') !== 0) return;
+                if (best.position !== null || key.indexOf(pre + '.') !== 0 || SKIP_FIELD.test(e.field)) return;
                 if (typeof e.value === 'number' && NAME.position.test(e.field)) best.position = posMs(e.value, best.duration);
                 else if (e.value && typeof e.value === 'object') {
-                    leaves(e.value, '').forEach((l) => {
+                    leaves(normalize(e.value), '').forEach((l) => {
                         if (best.position === null && typeof l[1] === 'number' && NAME.position.test(lastName(l[0] || e.field))) best.position = posMs(l[1], best.duration);
                     });
                 }
@@ -257,4 +296,4 @@ function scanCatalog(file) {
     return { error: '', hits: hits.slice(0, 40), total: Object.keys(all).length };
 }
 
-module.exports = { NowPlaying, scanCatalog, trackIn, leaves, instancesOf, fieldsOf, textOf, posMs };
+module.exports = { NowPlaying, scanCatalog, trackIn, leaves, instancesOf, fieldsOf, textOf, posMs, normalize };

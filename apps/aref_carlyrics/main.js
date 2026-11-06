@@ -21,7 +21,7 @@ const LyricsLib = require('./lyrics');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -80,7 +80,6 @@ mgu.run({
             const timing = () => (posVal !== null ? 'from the car' : 'estimated (tap "Song just started" to sync)');
 
             ui.onClick('BTN_SYNC', guard('sync', () => { startAt = Date.now(); posVal = null; posTicks = 0; say('Synced: the song starts now'); }));
-            ui.onClick('BTN_PROBE', guard('probe', () => { ui.open('PROBE'); }));
 
             /* ---------- MAIN: the song and its lyrics ---------- */
             const fit = (cv, s, size, w, opt) => {
@@ -169,7 +168,9 @@ mgu.run({
                 cv.text(a, LX, 230, 38, WHITE, { font: 'bold', literal: true });
                 if (b) cv.text(fit(cv, b, 22, LW), LX, 280, 22, A(WHITE, 0.65), { literal: true });
             }
+            let probe = false;            // the Probe view is on (it shares this screen)
             ctx.loop('MAIN', 10, guard('main', async () => {
+                if (probe) { await drawProbe(); return; }
                 const cv = ctx.canvas(W, H);
                 if (!cur) follow();
                 if (!cur) {
@@ -210,10 +211,32 @@ mgu.run({
                     bar: cur.duration ? position() / cur.duration : null, small: [cur.title, line || cur.artist] };
             }, { fps: 1 });
 
-            /* ---------- PROBE: everything the car reports ---------- */
-            let page = 0;
+            /*
+             * PROBE: everything the car reports, shown in the main screen (a second screen of its own drew over
+             * this one on iDrive 7, and the two flashed). Probe switches between the lyrics and the probe.
+             */
+            let page = 0, vpage = 0;
             const PAGES = ['Values the car sends', 'Media interfaces in the catalog', 'Subscriptions'];
-            ui.onClick('BTN_PAGE', guard('page', () => { page = (page + 1) % PAGES.length; }));
+            const PROBE_BTNS = ['BTN_PAGE', 'BTN_MORE', 'BTN_SAVE'];
+            const shown = (id, on) => {
+                const D = ctx.display;
+                ui.visible(id, on && !(D && D.hmiBarHidden));
+                if (D && D.ownHidden) {
+                    if (on) D.ownHidden.delete(id); else D.ownHidden.add(id);
+                    D._btns = null;
+                    if (D.place && typeof D._place === 'function') D._place();
+                }
+            };
+            const showButtons = () => {
+                PROBE_BTNS.forEach((b) => shown(b, probe));
+                shown('BTN_SYNC', !probe);
+                ui.text('BTN_PROBE', probe ? 'Lyrics' : 'Probe');
+            };
+            ctx.onLayout(guard('layout', () => showButtons()));
+            showButtons();
+            ui.onClick('BTN_PROBE', guard('probe', () => { probe = !probe; page = 0; vpage = 0; showButtons(); }));
+            ui.onClick('BTN_PAGE', guard('page', () => { page = (page + 1) % PAGES.length; vpage = 0; }));
+            ui.onClick('BTN_MORE', guard('more', () => { vpage++; }));
             const report = () => {
                 const L = ['Car Lyrics ' + VERSION + ' probe, ' + new Date().toISOString(), ''];
                 L.push('== track picked: ' + (cur ? JSON.stringify(cur) : 'none'), '');
@@ -237,28 +260,31 @@ mgu.run({
             ui.onClick('BTN_SAVE', guard('save', () => { saveReport(); say('Saved to ' + reportFile, 5000); }));
             setInterval(guard('report', () => { if (np.values().length) saveReport(); }), REPORT_MS);
 
-            ctx.loop('PROBE', 2, guard('probe', async () => {
-                const t = ctx.theme(), cv = ctx.canvas(W, H).clear(t.bg);
+            // the values that say most about what is playing first: metadata, item, title, state, time
+            const RANK = /metadata|item|title|artist|album|state|time|track|song/i;
+            async function drawProbe() {
+                const t = ctx.theme(), cv = ctx.canvas(W, H).clear(t.bg), PER = 17;
                 cv.text(PAGES[page] + '  (' + (page + 1) + '/' + PAGES.length + ')', 40, 44, 26, t.text, { font: 'bold', literal: true });
                 cv.text(cur ? 'Track: "' + cur.title + '" by "' + cur.artist + '"' : 'Track: not found yet', W - 40, 44, 18, t.dim, { align: 'right', literal: true });
-                const rows = [];
+                let rows = [];
                 if (page === 0) {
-                    const v = np.values();
+                    const v = np.values().slice().sort((a, b) => (RANK.test(b.key) ? 1 : 0) - (RANK.test(a.key) ? 1 : 0) || b.changes - a.changes || b.at - a.at);
                     if (!v.length) rows.push('Nothing yet. Play a song on your phone with CarPlay connected.');
-                    v.slice(0, 18).forEach((x) => rows.push(x.key + ' = ' + x.text));
-                    if (v.length > 18) rows.push('... and ' + (v.length - 18) + ' more in carlyrics-probe.txt (Save report)');
+                    rows = rows.concat(v.map((x) => x.key.replace('MediaPlayer/', '') + ' = ' + x.text + (x.changes ? '  (' + x.changes + ' changes)' : '')));
                 } else if (page === 1) {
                     if (catalog.error) rows.push('Catalog not read: ' + catalog.error);
-                    catalog.hits.slice(0, 18).forEach((h) => rows.push(h.iface.replace('de.bmw.infotainment.', '') + ': ' + h.words.join(', ')));
+                    rows = rows.concat(catalog.hits.map((h) => h.iface.replace('de.bmw.infotainment.', '') + ': ' + h.words.join(', ')));
                     if (!catalog.error && !catalog.hits.length) rows.push('No interface in the catalog names a title or an artist.');
                 } else {
-                    np.status().forEach((s) => rows.push(s.iface.split('.').pop() + ' / ' + s.instance + ': ' + (s.available ? 'available' : 'not available') + ', ' + s.fields + ' fields' + (s.error ? ' - ' + s.error : '')));
+                    np.status().forEach((s2) => rows.push(s2.iface.split('.').pop() + ' / ' + s2.instance + ': ' + (s2.available ? 'available' : 'not available') + ', ' + s2.fields + ' fields' + (s2.error ? ' - ' + s2.error : '')));
                     rows.push('', 'Report file: ' + reportFile, 'Online: ' + (net.online() ? 'yes' : 'no (lyrics need the Store\'s internet)'));
                 }
-                rows.forEach((r, k) => cv.text(fit(cv, r, 20, W - 80, { literal: true }), 40, 92 + k * 24, 20, k % 2 ? t.dim : t.text, { literal: true }));
-                if (toast && Date.now() < toast.until) cv.text(toast.text, W / 2, H - 16, 20, t.accent2 || t.text, { align: 'center', literal: true });
-                await ui.image('PROBE_GFX', cv);
-            }));
+                const pages = Math.max(1, Math.ceil(rows.length / PER)), pg = vpage % pages;
+                rows.slice(pg * PER, pg * PER + PER).forEach((r, k) => cv.text(fit(cv, r, 20, W - 80, { literal: true }), 40, 86 + k * 24, 20, k % 2 ? t.dim : t.text, { literal: true }));
+                if (pages > 1) cv.text('Page ' + (pg + 1) + ' of ' + pages + ' (More)', W - 40, H - 14, 16, t.dim, { align: 'right', literal: true });
+                if (toast && Date.now() < toast.until) cv.text(toast.text, 40, H - 14, 16, t.accent2 || t.text, { literal: true });
+                await ui.image('MAIN_GFX', cv);
+            }
 
             /* ---------- start: the catalog (one read), then the subscriptions ---------- */
             catalog = NP.scanCatalog();
