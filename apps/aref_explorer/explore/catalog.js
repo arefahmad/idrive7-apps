@@ -16,7 +16,7 @@
 const TOPICS = {
     ambient: { name: 'Ambient light', iface: /ambien|interiorlight|innenlicht|lightcolou?r|lighting|lin_?rgb/i, member: /ambien|colou?r|rgb|hue|brightness|lightprofile|lightscene|innenlicht/i },
     route: { name: 'Route guidance and ETA', iface: /navigation|guidance|route|carplay|projected/i, member: /eta|arrival|timetodest|remainingtime|remainingdistance|distancetodest|destination|maneuver|manoeuvre|guidance/i },
-    gps: { name: 'GPS position', iface: /position|location|gnss|gps|navigation/i, member: /latitude|longitude|heading|altitude|gnss|gps|wgs|position/i },
+    gps: { name: 'GPS position', iface: /position|location|gnss|gps|navigation/i, member: /latitude|longitude|heading|altitude|gnss|gps|wgs|position|velocity|groundspeed|speedoverground|course/i },
     media: { name: 'Media now playing', iface: /media|entertainment|carplay|audio|player|tuner/i, member: /title|artist|album|nowplaying|metadata|trackinfo|playtime|elapsed/i },
     climate: { name: 'Climate', iface: /climate|hvac|ihka|klima|airconditioning/i, member: /temperature|fan|blower|airflow|seatheat|ventilat|defrost|setpoint/i },
     lights: { name: 'Exterior lights', iface: /light|lamp|flm|headlight|welcome/i, member: /welcome|daytime|drl|lowbeam|highbeam|headlight|cominghome|leavinghome/i },

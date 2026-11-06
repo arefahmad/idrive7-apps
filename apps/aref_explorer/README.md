@@ -3,7 +3,7 @@
 Finds the head unit's services behind a car feature and shows what each one offers. A tool for building
 apps: every new feature starts with knowing which service the car exposes for it.
 
-Version 0.1.1 · iDrive 7 · package `aref_explorer` · [all apps and how to install](../../README.md)
+Version 0.1.2 · iDrive 7 · package `aref_explorer` · [all apps and how to install](../../README.md)
 
 ## Who it's for
 
@@ -23,7 +23,7 @@ or members match, best first:
 |---|---|
 | Ambient light | interior and ambient lighting, colours, brightness, light profiles |
 | Route guidance and ETA | arrival time, remaining time and distance, destination, maneuvers |
-| GPS position | latitude, longitude, heading, altitude |
+| GPS position | latitude, longitude, heading, altitude, GPS speed (velocity, speed over ground) |
 | Media now playing | title, artist, album, playing time |
 | Climate | temperatures, fan, seat heating and ventilation |
 | Exterior lights | welcome lights, daytime running lights, headlights |
