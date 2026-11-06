@@ -2,7 +2,7 @@
   "id": "aref_carlyrics",
   "title": "Car Lyrics",
   "description": "Synced lyrics (LRCLIB) for whatever the car is playing: Apple Music over CarPlay, Bluetooth or USB, no Spotify needed. It reads the track from the head unit itself. Experimental: version 0.1 is also a probe, because the field that carries the CarPlay track on iDrive 7 isn't known yet; its Probe screen shows what the car reports. Read-only toward the car. Needs internet through the Store's uplink.",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "vendor": "aref",
   "loggingId": "OAR1",
   "internet": true,

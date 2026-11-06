@@ -3,7 +3,7 @@
 Synced lyrics for whatever the car is playing: Apple Music over CarPlay, Bluetooth or USB. No Spotify
 account and no app on the phone.
 
-Version 0.2.3 · iDrive 7 · package `aref_carlyrics` · [all apps and how to install](../../README.md)
+Version 0.2.4 · iDrive 7 · package `aref_carlyrics` · [all apps and how to install](../../README.md)
 
 > [!WARNING]
 > **Experimental.** Which interface and field carry the CarPlay track on iDrive 7 isn't documented. This

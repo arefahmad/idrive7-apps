@@ -83,8 +83,14 @@ function normalize(v, depth) {
         }
         return v.map((x) => normalize(x, depth + 1));
     }
+    // a typed value wrapper, as CarPlay's metadata sends it ({ stringValue: 'x' }, { intValue: 3 }): the value itself
+    const ks = Object.keys(v);
+    if (ks.length && ks.every((k) => /value$/i.test(k))) {
+        const k = ks.filter((x) => v[x] !== null && v[x] !== undefined && v[x] !== '')[0];
+        if (k !== undefined && typeof v[k] !== 'object') return v[k];
+    }
     const o = {};
-    Object.keys(v).forEach((k) => { o[k] = normalize(v[k], depth + 1); });
+    ks.forEach((k) => { o[k] = normalize(v[k], depth + 1); });
     return o;
 }
 

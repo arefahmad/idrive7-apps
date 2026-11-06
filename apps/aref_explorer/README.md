@@ -3,7 +3,7 @@
 Finds the head unit's services behind a car feature and shows what each one offers. A tool for building
 apps: every new feature starts with knowing which service the car exposes for it.
 
-Version 0.2.0 · iDrive 7 · package `aref_explorer` · [all apps and how to install](../../README.md)
+Version 0.2.1 · iDrive 7 · package `aref_explorer` · [all apps and how to install](../../README.md)
 
 ## Who it's for
 

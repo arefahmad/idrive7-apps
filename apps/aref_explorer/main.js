@@ -15,7 +15,7 @@ const path = require('path');
 const mgu = require('./kit/mgu');
 const CAT = require('./catalog');
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const W = 1600, H = 520;
 const ROWS = 9;
 // MGU_EXPLORER_ROOT: a folder standing in for / (tools/screens.js on a PC)
@@ -74,7 +74,7 @@ mgu.run({
             };
             function drawDetail(cv, t, L, h) {
                 const ms = CAT.membersOf(h.def), PER = 16;
-                cv.text(fit(cv, h.iface, 24, W - 420, { font: 'bold', literal: true }), 40, 50, 24, t.text, { font: 'bold', literal: true });
+                cv.text(fit(cv, h.iface.replace('de.bmw.infotainment.', '').replace('com.harman.infotainment.', ''), 24, W - 420, { font: 'bold', literal: true }), 40, 50, 24, t.text, { font: 'bold', literal: true });
                 cv.text('Match ' + (detail + 1) + ' of ' + hits().length + '   \u00b7   ' + ms.length + ' members', W - 40, 50, 18, t.dim, { align: 'right', literal: true });
                 const pages = Math.max(1, Math.ceil(ms.length / PER)), pg = dpage % pages;
                 ms.slice(pg * PER, pg * PER + PER).forEach((m, i) => {

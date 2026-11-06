@@ -114,6 +114,36 @@ test('BMW-style metadata lists, item time, and previous/next items skipped', asy
     assert.deepStrictEqual(NP.instancesOf({ instances: ['Usb1', 'AndroidAutoProjected', 'Bluetooth1', 'CarPlayProjected'] }), ['AndroidAutoProjected', 'CarPlayProjected', 'Bluetooth1', 'Usb1']);
 });
 
+test('CarPlayMedia metadata as a real iDrive 7 sends it (key, value.stringValue)', async () => {
+    const meta = [
+        { key: 'GENRE', value: { stringValue: 'R&B/Soul' } },
+        { key: 'ARTIST', value: { stringValue: 'The Weeknd' } },
+        { key: 'ALBUM', value: { stringValue: 'Trilogy' } },
+        { key: 'TITLE', value: { stringValue: 'The Party & The After Party' } },
+        { key: 'COVER_FILE', value: { stringValue: '' } },
+    ];
+    const signals = {
+        loadConfig: () => ({ instances: ['AndroidAutoProjected', 'CarPlayMedia'], fields: { currentItemMetadata: {}, currentItemTime: {}, playerState: {} } }),
+        watch: async (iface, inst, h) => {
+            if (inst === 'CarPlayMedia') {
+                h.currentItemMetadata(meta);
+                h.currentItemTime({ elapsed: 74237, total: 459707 });
+                h.playerState('PLAYER_STATE_PLAY');
+            }
+            return { available: true };
+        },
+    };
+    const np = new NP.NowPlaying(signals, { info() {}, warn() {}, error() {} }, [{ iface: 'x.MediaPlayer', instances: [] }]);
+    await np.start();
+    const tr = np.track();
+    np.stop();
+    assert.strictEqual(tr.title, 'The Party & The After Party');
+    assert.strictEqual(tr.artist, 'The Weeknd');
+    assert.strictEqual(tr.album, 'Trilogy');
+    assert.strictEqual(tr.duration, 459707);
+    assert.strictEqual(tr.position, 74237);
+});
+
 test('LRC parsing and the line at a time', () => {
     const lines = L.parseLrc('[00:01.00]First\n[00:05.50]Second\n[00:10.00]Third');
     assert.strictEqual(lines.length, 3);
