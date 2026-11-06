@@ -225,6 +225,8 @@ async function explorer() {
     const h = harness('aref_explorer', {});
     await h.ready();
     await h.shot('MAIN', 'ambient.png');
+    h.clicks.BTN_DETAIL();
+    await h.shot('MAIN', 'details.png');
     delete process.env.MGU_EXPLORER_ROOT;
 }
 

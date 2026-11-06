@@ -3,7 +3,7 @@
 Finds the head unit's services behind a car feature and shows what each one offers. A tool for building
 apps: every new feature starts with knowing which service the car exposes for it.
 
-Version 0.1.2 · iDrive 7 · package `aref_explorer` · [all apps and how to install](../../README.md)
+Version 0.2.0 · iDrive 7 · package `aref_explorer` · [all apps and how to install](../../README.md)
 
 ## Who it's for
 
@@ -30,7 +30,10 @@ or members match, best first:
 | Doors, locks, windows | doors, locks, windows, tailgate, mirrors, sunroof |
 | Fuel, range, odometer | tank, range, mileage, consumption |
 
-**Next topic** steps through them; **More** pages through a long list.
+**Next topic** steps through them; **More** pages through a long list. **Details** opens the first
+match and lists every member it has (fields, methods, broadcasts) with what the catalog says about each:
+whether a field can be read, written or subscribed to, its type, a method's arguments. Tap it again for
+the next match; after the last, it goes back to the list. Members that match the topic are highlighted.
 
 ## Screens
 
@@ -38,6 +41,8 @@ Screens rendered on a PC from the app's own drawing code with a made-up catalog 
 photos of a car.
 
 ![Ambient light](../../docs/screenshots/aref_explorer/ambient.png)
+
+![Details](../../docs/screenshots/aref_explorer/details.png)
 
 ## The report
 

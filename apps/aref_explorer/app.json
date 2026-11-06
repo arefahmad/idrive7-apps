@@ -2,7 +2,7 @@
   "id": "aref_explorer",
   "title": "Car Explorer",
   "description": "Finds the head unit's services behind a car feature (ambient light, route guidance and ETA, GPS position, now playing, climate, lights, doors, fuel) in its interface catalog and shows what each offers. Writes everything to explorer-report.txt, which new apps are designed from. Read-only: it reads two platform files and sends nothing to the car. For developers and curious owners.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "vendor": "aref",
   "loggingId": "OAR5",
   "screens": [
@@ -14,6 +14,10 @@
         [
           "BTN_TOPIC",
           "Next topic"
+        ],
+        [
+          "BTN_DETAIL",
+          "Details"
         ],
         [
           "BTN_MORE",

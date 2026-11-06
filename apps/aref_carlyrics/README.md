@@ -3,7 +3,7 @@
 Synced lyrics for whatever the car is playing: Apple Music over CarPlay, Bluetooth or USB. No Spotify
 account and no app on the phone.
 
-Version 0.2.2 · iDrive 7 · package `aref_carlyrics` · [all apps and how to install](../../README.md)
+Version 0.2.3 · iDrive 7 · package `aref_carlyrics` · [all apps and how to install](../../README.md)
 
 > [!WARNING]
 > **Experimental.** Which interface and field carry the CarPlay track on iDrive 7 isn't documented. This
@@ -52,7 +52,7 @@ Add it to the iDrive home screen like BMW's own widgets: the song and the lyric 
 
 ## The probe
 
-Version 0.1 subscribes to every field of BMW's `CarPlayManager` and `MediaPlayer` interfaces and picks the
+It subscribes to every field of BMW's `CarPlayManager`, `MediaPlayer`, `HmiMediaState` and `DynamicMediaPlayer` interfaces and picks the
 track out by field name. The **Probe** screen has three pages:
 
 - **Values the car sends:** every field and its latest value.

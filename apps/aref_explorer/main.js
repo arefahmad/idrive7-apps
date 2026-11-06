@@ -15,7 +15,7 @@ const path = require('path');
 const mgu = require('./kit/mgu');
 const CAT = require('./catalog');
 
-const VERSION = '0.1.2';
+const VERSION = '0.2.0';
 const W = 1600, H = 520;
 const ROWS = 9;
 // MGU_EXPLORER_ROOT: a folder standing in for / (tools/screens.js on a PC)
@@ -40,6 +40,7 @@ mgu.run({
             log.info('catalog: ' + (error || total + ' interfaces') + '; oap-mainapp interface files: ' + srcGen.length);
 
             let topic = 0, page = 0, toast = null, cache = {};
+            let detail = -1, dpage = 0;          // Details: which match (-1: the list), and its page
             const say = (text, ms) => { toast = { text: text, until: Date.now() + (ms || 4000) }; };
             const hits = () => {
                 const k = CAT.ORDER[topic];
@@ -54,8 +55,15 @@ mgu.run({
             // the report is written once at start (the catalog doesn't change while the car runs)
             try { save(); log.info('report: ' + REPORT); } catch (e) { log.warn('report: ' + e.message); }
 
-            ui.onClick('BTN_TOPIC', guard('topic', () => { topic = (topic + 1) % CAT.ORDER.length; page = 0; }));
-            ui.onClick('BTN_MORE', guard('more', () => { page++; }));
+            ui.onClick('BTN_TOPIC', guard('topic', () => { topic = (topic + 1) % CAT.ORDER.length; page = 0; detail = -1; ui.text('BTN_DETAIL', 'Details'); }));
+            ui.onClick('BTN_MORE', guard('more', () => { if (detail >= 0) dpage++; else page++; }));
+            // Details steps through the matches one by one, then back to the list
+            ui.onClick('BTN_DETAIL', guard('detail', () => {
+                const n = hits().length;
+                detail = n ? (detail + 1 < Math.min(n, 40) ? detail + 1 : -1) : -1;
+                dpage = 0;
+                ui.text('BTN_DETAIL', detail >= 0 ? 'Next match' : 'Details');
+            }));
             ui.onClick('BTN_SAVE', guard('save', () => { save(); say('Saved to ' + REPORT); }));
 
             const fit = (cv, s, size, w, opt) => {
@@ -64,9 +72,30 @@ mgu.run({
                 while (s.length > 1 && cv.textWidth(s + '...', size, opt) > w) s = s.slice(0, -1);
                 return s + '...';
             };
+            function drawDetail(cv, t, L, h) {
+                const ms = CAT.membersOf(h.def), PER = 16;
+                cv.text(fit(cv, h.iface, 24, W - 420, { font: 'bold', literal: true }), 40, 50, 24, t.text, { font: 'bold', literal: true });
+                cv.text('Match ' + (detail + 1) + ' of ' + hits().length + '   \u00b7   ' + ms.length + ' members', W - 40, 50, 18, t.dim, { align: 'right', literal: true });
+                const pages = Math.max(1, Math.ceil(ms.length / PER)), pg = dpage % pages;
+                ms.slice(pg * PER, pg * PER + PER).forEach((m, i) => {
+                    const y = 92 + i * 25, hit = CAT.TOPICS[CAT.ORDER[topic]].member.test(m[0]);
+                    let d = '';
+                    try { d = m[2] ? JSON.stringify(m[2]) : ''; } catch (e) { d = ''; }
+                    cv.text(m[1].toUpperCase(), 40, y + 16, 13, t.dim, { font: 'bold', literal: true });
+                    cv.text(fit(cv, m[0], 18, 520, L), 150, y + 16, 18, hit ? (t.accent2 || t.text) : t.text, hit ? { font: 'bold', literal: true } : L);
+                    if (d) cv.text(fit(cv, d, 15, W - 740, L), 700, y + 16, 15, t.dim, L);
+                });
+                if (pages > 1) cv.text('Page ' + (pg + 1) + ' of ' + pages + ' (More)', W - 40, H - 14, 16, t.dim, { align: 'right', literal: true });
+            }
             ctx.loop('MAIN', 2, guard('draw', async () => {
                 const t = ctx.theme(), cv = ctx.canvas(W, H).clear(t.bg), L = { literal: true };
                 const T = CAT.TOPICS[CAT.ORDER[topic]], list = hits();
+                if (detail >= 0 && list[detail]) {
+                    drawDetail(cv, t, L, list[detail]);
+                    if (toast && Date.now() < toast.until) cv.text(toast.text, 40, H - 14, 16, t.accent2 || t.text, L);
+                    await ui.image('MAIN_GFX', cv);
+                    return;
+                }
                 cv.text(T.name, 40, 50, 30, t.text, { font: 'bold', literal: true });
                 cv.text((error || total + ' interfaces in the catalog') + '   ·   ' + list.length + ' match', W - 40, 50, 18, t.dim, { align: 'right', literal: true });
                 if (!list.length) cv.text(error ? 'The catalog could not be read: ' + error : 'Nothing in the catalog matches this topic.', 40, 100, 22, t.dim, L);

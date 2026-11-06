@@ -43,6 +43,30 @@ function namesIn(def) {
     return out;
 }
 
+/**
+ * Every member of a definition with what the catalog says about it: [[name, kind, description]], fields
+ * first. The description is the member's own JSON (getter / setter / notifier flags, its type, its
+ * arguments), whatever shape the catalog gives it.
+ */
+function membersOf(def) {
+    const out = [];
+    const CAT = (lk) => (/^(attributes|fields)$/.test(lk) ? 'field' : /^methods$/.test(lk) ? 'method' : /^(broadcasts|events)$/.test(lk) ? 'broadcast' : '');
+    const walk = (v, depth) => {
+        if (!v || typeof v !== 'object' || depth > 4) return;
+        Object.keys(v).forEach((k) => {
+            const cat = CAT(k.toLowerCase());
+            if (!cat) { if (!Array.isArray(v)) walk(v[k], depth + 1); return; }
+            const m = v[k];
+            if (Array.isArray(m)) m.forEach((x) => { if (typeof x === 'string') out.push([x, cat, null]); else if (x && x.name) out.push([x.name, cat, x]); });
+            else if (m && typeof m === 'object') Object.keys(m).forEach((n) => out.push([n, cat, m[n]]));
+        });
+    };
+    walk(def, 0);
+    const order = { field: 0, method: 1, broadcast: 2 };
+    out.sort((a, b) => order[a[1]] - order[b[1]] || (a[0] < b[0] ? -1 : 1));
+    return out;
+}
+
 /** Interfaces matching a topic, best first: [{ iface, score, names: [[name, kind]], fields, methods, broadcasts, def }]. */
 function search(db, topic, max) {
     const all = (db && db.interfaces) || db || {};
@@ -84,4 +108,4 @@ function report(db, total, opts) {
     return L.join('\n');
 }
 
-module.exports = { TOPICS, ORDER, search, report, namesIn };
+module.exports = { TOPICS, ORDER, search, report, namesIn, membersOf };

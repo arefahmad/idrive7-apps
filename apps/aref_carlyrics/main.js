@@ -21,12 +21,15 @@ const LyricsLib = require('./lyrics');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.2.2';
+const VERSION = '0.2.3';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
     { iface: 'de.bmw.infotainment.a4a.carplay.CarPlayManager', instances: ['CarPlayManagerInst1'] },
     { iface: 'de.bmw.infotainment.entertainment.mediaplayer.MediaPlayer', instances: [] },
+    // found by Car Explorer on a G22: what the HMI's own media screens show, and the dynamic (streaming) player
+    { iface: 'de.bmw.infotainment.hmi.hmimediastate.HmiMediaState', instances: [] },
+    { iface: 'de.bmw.infotainment.entertainment.dynamicmediaplayer.DynamicMediaPlayer', instances: [] },
 ];
 const LEAD_MS = 250;              // a line shows this much before its time (reading takes a moment)
 const SCROLL_MS = 300;            // a new line slides into the middle over this long

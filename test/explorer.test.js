@@ -32,3 +32,9 @@ ok('the report covers every topic', () => {
     CAT.ORDER.forEach((k) => assert.ok(t.indexOf('==== ' + CAT.TOPICS[k].name) >= 0));
 });
 console.log(n + ' tests passed');
+ok('members with their descriptions, fields first', () => {
+    const m = CAT.membersOf(db.interfaces['de.x.lighting.InteriorLight']);
+    assert.deepStrictEqual(m.map((x) => x[0] + ':' + x[1]), ['statusAmbientLightColour:field', 'statusLightProfile:field', 'setAmbientLightColour:method']);
+    assert.deepStrictEqual(m[0][2], { getter: true, type: 'Rgb' });
+});
+console.log('membersOf ok');
