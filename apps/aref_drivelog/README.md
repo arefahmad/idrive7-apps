@@ -53,7 +53,7 @@ Each run with its Dragy time, the difference, and the adjusted time. The offset 
 
 Setting the Dragy's time for a run with the bar buttons.
 
-## Screens
+## Views
 
 - **This drive:** the drive going on, or the last one when parked, as ten tiles.
 - **History:** every drive kept, newest first.
