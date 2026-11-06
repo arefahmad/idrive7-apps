@@ -208,9 +208,27 @@ async function carLyrics() {
     delete stubs['./http'];
 }
 
+async function explorer() {
+    // a made-up catalog with the shapes the real one has (interface -> attributes / methods / broadcasts)
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'explorer-'));
+    fs.mkdirSync(path.join(root, 'etc/oap/someip'), { recursive: true });
+    const iface = (attrs, methods, bc) => { const a = {}; attrs.forEach((n) => { a[n] = { getter: true, notifier: true }; }); return { attributes: a, methods: methods || [], broadcasts: bc || [] }; };
+    fs.writeFileSync(path.join(root, 'etc/oap/someip/someip-interfaces.json'), JSON.stringify({ interfaces: {
+        'de.example.lighting.InteriorLight': iface(['statusAmbientLightColour', 'statusAmbientBrightness', 'statusLightProfile'], ['setAmbientLightColour']),
+        'de.example.hmi.Personalisation': iface(['ambientLightSettings', 'driverProfile'], ['setAmbientLightSettings']),
+        'de.example.vehicle.BodyControl': iface(['statusDoors', 'statusWindows'], []),
+        'de.example.navigation.Guidance': iface(['guidanceState', 'remainingDistance', 'estimatedTimeOfArrival'], [], ['maneuverUpdate']),
+    } }));
+    process.env.MGU_EXPLORER_ROOT = root;
+    const h = harness('aref_explorer', {});
+    await h.ready();
+    await h.shot('MAIN', 'ambient.png');
+    delete process.env.MGU_EXPLORER_ROOT;
+}
+
 (async () => {
     const only = process.argv[2];
-    const all = { carcare: carCare, drivelog: driveLog, faultwatch: faultWatch, carlyrics: carLyrics };
+    const all = { carcare: carCare, drivelog: driveLog, faultwatch: faultWatch, carlyrics: carLyrics, explorer };
     for (const k of Object.keys(all)) if (!only || only === k) await all[k]();
     Date.now = realNow;
     setTimeout(() => process.exit(0), 100);
