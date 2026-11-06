@@ -6,6 +6,7 @@
  *   tr.feed(d, tMs)                          // one sample: { speed km/h, rpm, gLong, gLat (g), oil, coolant (C), stage }
  *   tr.end(tMs)                              // the car is switching off: close the drive now
  *   tr.current / tr.trips / tr.state()       // the drive going on (or null), the finished ones, what to save
+ *   tr.newRuns                               // 0-60 runs timed since last emptied (the app takes them)
  *
  * A drive starts when the car first moves (5 km/h) and ends after PARK_MS in P, or STOP_MS standing still,
  * or when the app is told the car is switching off. Drives under MIN_KM are dropped (moving the car in the
@@ -37,6 +38,7 @@ class Trips {
         this.parkSince = 0; this.stopSince = 0;
         this.run = null;             // { t0, top } a 0-60 run going on
         this.armed = false;          // standing still: the next start can be a run
+        this.newRuns = [];           // 0-60 runs timed since the app last took them: [{ at, s }]
         // a drive the car switched off in the middle of (the app was stopped with it): keep it as it was
         if (s.current && s.current.km >= MIN_KM) this._push(s.current);
     }
@@ -90,6 +92,7 @@ class Trips {
             const tc = prev && prev.kmh < RUN_KMH ? prev.t + (t - prev.t) * ((RUN_KMH - prev.kmh) / Math.max(0.01, kmh - prev.kmh)) : t;
             const s = (tc - this.run.t0) / 1000;
             if (this.current && s > 1.5 && s < 30) {
+                this.newRuns.push({ at: Math.round(tc), s: Math.round(s * 100) / 100 });
                 this.current.runs060++;
                 if (this.current.best060 === null || s < this.current.best060) this.current.best060 = Math.round(s * 100) / 100;
             }

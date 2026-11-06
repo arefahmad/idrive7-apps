@@ -52,11 +52,31 @@ Records every drive in the background and keeps its numbers.
 - **This drive:** distance, time moving, top speed, best 0-60 mph, peak rpm, the most acceleration,
   braking and cornering g, and the highest oil and coolant temperatures. Shows the last drive when parked.
 - **History:** every drive kept (up to 300), newest first.
+- **0-60 runs:** every timed run, with its Dragy time and adjusted time once known.
+- **Compare with Dragy** (Settings, off by default): after a run, **Enter Dragy time** and set the time
+  your Dragy showed. Drive Log learns the offset between its time and the Dragy's (the median of the
+  pairs). From 3 runs on, every 0-60 also shows a **Dragy-adjusted** time, and keeps showing it after you
+  turn the setting off. Enter Dragy times the same way every run: with or without its 1-ft rollout.
 - **Save CSV:** writes `drives.csv` to the app's data folder.
 
 A drive starts when the car moves and ends after 30 s in P or 5 minutes standing still. The 0-60 time uses
 the car's own wheel speed, not GPS. **Safety:** read-only; it only listens to the car's driving signals. It
 starts with the car.
+
+### Car Care (`aref_carcare`)
+
+Your own service intervals, kept apart from BMW's.
+
+- **Items:** engine oil (3,000 mi or 12 months by default), spark plugs, ignition coils, diff fluid,
+  transfer case fluid, transmission fluid, brake fluid, air filter, cabin filter. Each interval is a
+  setting.
+- **Done today:** records the odometer and the date (press twice to confirm).
+- **Done earlier:** sets a service from before you installed the app, in miles and months ago.
+- Each item shows a bar and how much is left; due soon in amber, overdue in red.
+
+It never resets or writes BMW's own service reminders, so a dealer's free oil change still comes due on
+BMW's schedule while this counts your own changes. **Safety:** read-only; it reads the odometer from the
+instrument cluster's signal.
 
 ## Install
 
@@ -74,7 +94,7 @@ starts with the car.
   `kit/LICENSE.nickgcode`, `kit/LICENSE.idrive7-apps`), with `diag.js` and `ecus.js` added from
   cauliflowermossgrape's kit, and one line in `kit/tools/build.py` that copies app.json's
   `"mguAppStartType"` (autostart) into the package.
-- `test/`: plain-Node tests, not installed: `node test/carlyrics.test.js`, `node test/faultwatch_drivelog.test.js`.
+- `test/`: plain-Node tests, not installed: `for f in test/*.test.js; do node $f; done`.
 - The car runs Node 8: no `?.`, `??`, object spread, `import`, class fields or optional catch binding.
 - Bump an app's `version` in `app.json` on every change you want cars to update to.
 - Never commit `oap-sdk/` or a built package (`dist/`). No BMW code or SDK is in this repository.
