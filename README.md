@@ -15,6 +15,7 @@ codes, clears or controls anything.
 | <img src="apps/aref_carcare/icon.png" width="40" alt=""> | **[Car Care](apps/aref_carcare/README.md)** | Your own service intervals (oil every 3,000 mi, plugs, coils, fluids, filters) by the car's odometer, kept apart from BMW's CBS. For owners who do their own oil changes but keep BMW's free services on a maintenance plan. |
 | <img src="apps/aref_drivelog/icon.png" width="40" alt=""> | **[Drive Log](apps/aref_drivelog/README.md)** | Every drive recorded in the background: distance, top speed, 0-60 mph, peak g and temperatures. Calibrates itself against a Dragy, then shows a Dragy-adjusted 0-60 without one. |
 | <img src="apps/aref_faultwatch/icon.png" width="40" alt=""> | **[Fault Watch](apps/aref_faultwatch/README.md)** | Background fault-memory scans and a timeline of what changed, each with the speed, gear, rpm and temperature at the time. For tracking down intermittent faults. |
+| <img src="apps/aref_misfire/icon.png" width="40" alt=""> | **[Misfire Watch](apps/aref_misfire/README.md)** | Logs every misfire per cylinder across every drive, with the rpm, speed, gear and load at the time. Catches a weak coil or worn plug early. |
 | <img src="apps/aref_carlyrics/icon.png" width="40" alt=""> | **[Car Lyrics](apps/aref_carlyrics/README.md)** | Full-screen synced lyrics for Apple Music over CarPlay, Bluetooth or USB, with album art. No Spotify needed. |
 | <img src="apps/aref_explorer/icon.png" width="40" alt=""> | **[Car Explorer](apps/aref_explorer/README.md)** | Finds the head unit's services behind a feature (ambient light, route guidance, GPS, climate...) and reports what each offers. For anyone asking "can an app do X on my car?" |
 
@@ -46,8 +47,8 @@ What is planned and what it waits on: [ROADMAP.md](ROADMAP.md).
 
 1. In the Store: **Settings > Add source**, type `arefahmad/idrive7-apps`, and pick **Branch main**.
 2. Pick an app and tap **Install**. The head unit builds it from this repository.
-3. Restart the head unit once (Store **Settings > Restart head unit**). Fault Watch and Drive Log start
-   with the car from then on.
+3. Restart the head unit once (Store **Settings > Restart head unit**). Fault Watch, Misfire Watch and Drive Log
+   start with the car from then on.
 
 Updates appear in the Store. To remove an app, remove it in the Store; its data goes with it.
 
@@ -55,7 +56,8 @@ Updates appear in the Store. To remove an app, remove it in the Store; its data 
 
 - **Read-only toward the car.** No app here writes to a control unit, changes coding, clears faults or
   controls anything. Fault Watch sends one diagnostic request, `19 02` (read fault memory), the same one
-  BMW's testers use.
+  BMW's testers use. Misfire Watch reads the engine's misfire counters with OBD service 06, as scan tools
+  do.
 - **Centre screen only.** None of these apps draws over the instrument cluster or the HUD.
 - **No accounts and no cloud.** Data stays in each app's data folder on the head unit. Car Lyrics talks to
   LRCLIB for lyrics and Apple's iTunes Search API for album art, and nothing else.

@@ -218,6 +218,39 @@ async function faultWatch() {
     delete stubs['./kit/car']; delete stubs['./kit/diag'];
 }
 
+async function misfire() {
+    // a made-up history: a few drives, misfires mostly on cylinder 3 under load
+    stubs['./kit/car'] = carStub({ rpm: 2350, speed: 72, gear: 4, coolant: 96, oil: 104, torque: 180, driveMode: 'SPORT' });
+    stubs['./kit/diag'] = Object.assign({}, require(path.join(RUNTIME, 'diag')), {
+        Diag: function () { this.p = {}; this.init = () => Promise.resolve(this); },
+    });
+    const now = [0, 1, 7, 0, 0, 1], avg = [0, 1, 4, 0, 1, 0];
+    stubs['./dids'] = { DidReader: function () {
+        this.raws = {};
+        this.monitorKey = (e, m, d) => (d ? 'F6' : 'MID ') + m.toString(16);
+        this.supported = () => Promise.resolve([0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7]);
+        this.monitor = (e, mid) => Promise.resolve([{ tid: 0x0B, value: avg[mid - 0xA2] }, { tid: 0x0C, value: now[mid - 0xA2] }]);
+    } };
+    const c = (rpm, kmh, gear, nm, mode) => ({ rpm, speed: kmh, gear, torque: nm, coolant: 95, mode });
+    const ev = (ago, drive, cyl, n, ctx, early) => ({ at: tick(ago), drive, cyl, n, ctx, early: !!early });
+    const events = [
+        ev(86400 * 3, 1, 3, 2, c(820, 0, 0, 40), true), ev(86400 * 3 - 900, 1, 3, 1, c(5450, 118, 3, 470, 'SPORT PLUS')),
+        ev(86400 * 2, 2, 6, 1, c(760, 0, 0, 35)), ev(86400 - 400, 3, 3, 3, c(5900, 131, 3, 480, 'SPORT PLUS')), ev(86400 - 380, 3, 2, 1, c(6100, 137, 3, 475, 'SPORT PLUS')),
+        ev(900, 4, 3, 2, c(4800, 96, 4, 430, 'SPORT')), ev(600, 4, 6, 1, c(800, 0, 0, 30)), ev(240, 4, 3, 3, c(5600, 104, 3, 465, 'SPORT')), ev(200, 4, 2, 1, c(5800, 109, 3, 470, 'SPORT')),
+    ];
+    const d = (id, ago, mins, counts) => ({ id, start: tick(ago), end: tick(ago - mins * 60), counts, first: [0, 0, 0, 0, 0, 0], avg10: avg });
+    const state = { drive: d(4, 1500, 25, [0, 1, 5, 0, 0, 1]), drives: [d(1, 86400 * 3 + 1200, 34, [0, 0, 3, 0, 0, 0]), d(2, 86400 * 2 + 600, 18, [0, 0, 0, 0, 0, 1]), d(3, 86400 + 1800, 41, [0, 1, 3, 0, 0, 0])],
+        events, totals: [0, 2, 11, 0, 0, 2], last: { at: tick(60), counts: [0, 1, 5, 0, 0, 1] }, avg10: avg, reads: 3120 };
+    const h = harness('aref_misfire', { files: { 'misfires.json': state } });
+    await h.ready();
+    await new Promise((r) => setTimeout(r, 30));
+    await h.shot('MAIN', 'overview.png');
+    await h.widget('widget.png');
+    h.clicks.BTN_VIEW(); await h.shot('MAIN', 'log.png');
+    h.clicks.BTN_VIEW(); await h.shot('MAIN', 'drives.png');
+    delete stubs['./kit/car']; delete stubs['./kit/diag']; delete stubs['./dids'];
+}
+
 async function carLyrics() {
     // made-up lyrics for a made-up song, and a made-up cover (test/fixtures/cover_demo.jpg): nobody's work
     const lrc = ['[00:10.00]Headlights on the empty road', '[00:14.50]Counting every mile we owe', '[00:19.00]Radio low, the windows down and the city fading in the mirror',
@@ -275,7 +308,7 @@ async function explorer() {
 
 (async () => {
     const only = process.argv[2];
-    const all = { carcare: carCare, drivelog: driveLog, faultwatch: faultWatch, carlyrics: carLyrics, explorer };
+    const all = { carcare: carCare, drivelog: driveLog, faultwatch: faultWatch, carlyrics: carLyrics, explorer, misfire };
     for (const k of Object.keys(all)) if (!only || only === k) await all[k]();
     Date.now = realNow;
     setTimeout(() => process.exit(0), 100);
