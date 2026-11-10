@@ -1,0 +1,128 @@
+{
+  "id": "aref_eta",
+  "title": "ETA Bar",
+  "description": "Probe for an Apple Maps arrival time in the cluster's bottom strip. Shows the arrival time, time and distance left, and traffic that CarPlay or BMW navigation report for the route, and logs every value the car's guidance services send to eta-probe.log. Version 0.1 only reads; the next version uses what it finds to put the ETA in the cluster. Read-only.",
+  "version": "0.1.0",
+  "vendor": "aref",
+  "loggingId": "OAR7",
+  "startWidget": {
+    "comment": "Home-screen widget (kit/runtime/homewidget.js): the big size is a 384 x 256 picture main.js draws, the small size two text lines.",
+    "name": "ETA",
+    "layout": "LT_Table_OnlineApps_DriveRecorderWidget",
+    "image": "BackgroundImage1",
+    "size": [
+      384,
+      256
+    ],
+    "safe": [
+      0.09,
+      0.1
+    ],
+    "cells": {
+      "ErrorInfo": [
+        false,
+        "Bool"
+      ],
+      "background": [
+        true,
+        "Bool"
+      ],
+      "Title": [
+        "",
+        "Text"
+      ],
+      "ProgressbarVisible": [
+        false,
+        "Bool"
+      ],
+      "Progress": [
+        0,
+        "Float"
+      ],
+      "TextRecordings": [
+        "",
+        "Text"
+      ],
+      "TextCam": [
+        "",
+        "Text"
+      ],
+      "TimeElapsed": [
+        "",
+        "Text"
+      ],
+      "TimeRemaining": [
+        "",
+        "Text"
+      ]
+    }
+  },
+  "signals": {
+    "de.bmw.infotainment.navigation.projectedmodeguiding.ProjectedModeGuiding": {
+      "waypoints": "rs",
+      "currentRoad": "rs",
+      "activeRouteChange": "rs"
+    },
+    "de.bmw.infotainment.navigation.guiding.Guidance": {
+      "finalDestinationInfo": "rs",
+      "nextDestinationInfo": "rs",
+      "allDestinationsInfo": "rs",
+      "guidanceState": "rs",
+      "guidingProvider": "rs",
+      "currentRoad": "rs",
+      "travelledDistance": "rs",
+      "travelledTime": "rs"
+    },
+    "de.bmw.infotainment.a4a.carplay.CarPlayManager": {
+      "projectedGuidanceActive": "rs",
+      "projectedGuidanceMetadataAvailable": "rs"
+    }
+  },
+  "screens": [
+    {
+      "name": "MAIN",
+      "kind": "canvas",
+      "title": "ETA Bar",
+      "buttons": [
+        [
+          "BTN_MORE",
+          "More"
+        ],
+        [
+          "BTN_SAVE",
+          "Mark in log"
+        ],
+        [
+          "BTN_SETTINGS",
+          "Settings"
+        ]
+      ]
+    }
+  ],
+  "settings": [
+    {
+      "key": "theme",
+      "label": "Colours",
+      "type": "choice",
+      "default": "m_tricolour",
+      "options": [
+        [
+          "m_red",
+          "M Red"
+        ],
+        [
+          "m_tricolour",
+          "M Tricolour"
+        ],
+        [
+          "ice",
+          "Ice White"
+        ],
+        [
+          "amber",
+          "Night Amber"
+        ]
+      ]
+    }
+  ]
+}
