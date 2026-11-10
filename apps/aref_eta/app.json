@@ -2,7 +2,7 @@
   "id": "aref_eta",
   "title": "ETA Bar",
   "description": "Probe for an Apple Maps arrival time in the cluster's bottom strip. Shows the arrival time, time and distance left, and traffic that CarPlay or BMW navigation report for the route, and logs every value the car's guidance services send to eta-probe.log. Version 0.1 only reads; the next version uses what it finds to put the ETA in the cluster. Read-only.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "vendor": "aref",
   "loggingId": "OAR7",
   "startWidget": {
@@ -59,11 +59,13 @@
   },
   "signals": {
     "de.bmw.infotainment.navigation.projectedmodeguiding.ProjectedModeGuiding": {
+      "_instances": "Main_Instance",
       "waypoints": "rs",
       "currentRoad": "rs",
       "activeRouteChange": "rs"
     },
     "de.bmw.infotainment.navigation.guiding.Guidance": {
+      "_instances": "Main_Instance",
       "finalDestinationInfo": "rs",
       "nextDestinationInfo": "rs",
       "allDestinationsInfo": "rs",
@@ -74,6 +76,7 @@
       "travelledTime": "rs"
     },
     "de.bmw.infotainment.a4a.carplay.CarPlayManager": {
+      "_instances": "CarPlayManagerInst1",
       "projectedGuidanceActive": "rs",
       "projectedGuidanceMetadataAvailable": "rs"
     }

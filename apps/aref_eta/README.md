@@ -3,7 +3,7 @@
 Puts Apple Maps' arrival time where a Waze route's ETA shows today: the cluster's bottom strip, between the
 clock and the drive mode.
 
-Version 0.1.0 · iDrive 7 · package `aref_eta` · [all apps and how to install](../../README.md)
+Version 0.1.1 · iDrive 7 · package `aref_eta` · [all apps and how to install](../../README.md)
 
 > [!NOTE]
 > **0.1 is a probe.** It shows and logs what the car's guidance services report while a route runs. The
