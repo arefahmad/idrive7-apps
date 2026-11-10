@@ -9,9 +9,7 @@
  * CarPlayManager's guidance flags. Every change goes to eta-probe.log in the data folder (the homelab
  * collects it); the screen shows the trip it would show and the raw values.
  *
- * Test strip (0.2): writes the ETA once into CarPlay's street field (ProjectedModeGuiding.currentRoad), which the
- * cluster's bottom strip shows: the test of whether the strip can show the ETA. Nothing else is ever written; the
- * nav app replaces it at the next street, and ending the route clears it.
+ * Tests: see setState() below. Nothing else is written or called.
  * Node 8 only (the car's version). Nothing may throw out of a callback: every callback goes through guard().
  */
 const fs = require('fs');
@@ -20,7 +18,7 @@ const mgu = require('./kit/mgu');
 const R = require('./route');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const WATCH = [
@@ -75,18 +73,24 @@ mgu.run({
             let page = 0;
             ui.onClick('BTN_MORE', guard('more', () => { page++; }));
             ui.onClick('BTN_SAVE', guard('mark', () => { write('MARK (button)'); }));
-            // the test: the ETA text into CarPlay's street field once (the cluster's bottom strip shows that field)
+            /*
+             * The test (0.3): during a CarPlay route the car already holds the phone's ETA in Guidance.finalDestinationInfo,
+             * but Guidance.guidanceState stays INACTIVE, and the cluster's strip shows nothing. This tells the guidance
+             * service the phone's route is ACTIVE (ProjectedModeGuiding.setGuidanceState, the call the service has for
+             * the projected app's state) to see whether the strip then shows the ETA as for BMW's navigation.
+             * Test: off sends INACTIVE again (what the car had). Ending the route resets it as well.
+             */
             let note = null;
-            const say = (text) => { note = { text: text, until: Date.now() + 8000 }; };
-            ui.onClick('BTN_TEST', guard('test', () => {
-                const r = trip(), now = Date.now();
-                const text = r ? [R.arrivalText(r, now), R.leftText(r.travelSec), r.dist ? r.dist + ' ' + (r.unit || '') : null].filter(Boolean).join(' \u00b7 ') : 'ETA TEST';
+            const say = (text) => { note = { text: text, until: Date.now() + 9000 }; };
+            const setState = (state) => {
                 if (!proxies.carplay) { say('Not connected to CarPlay guidance yet'); write('TEST no proxy'); return; }
-                write('TEST write currentRoad = ' + JSON.stringify(text));
-                ctx.signals.set(proxies.carplay, 'currentRoad', { elements: [{ text: text }] }).then(
-                    () => { write('TEST write accepted'); say('Sent "' + text + '" - look at the strip'); },
-                    (e) => { write('TEST write failed: ' + (e && e.message || e)); say('The car refused it: ' + (e && e.message || e)); });
-            }));
+                write('TEST setGuidanceState ' + state + ', CAR_PLAY');
+                ctx.signals.call(proxies.carplay, 'setGuidanceState', { guidanceState: state, guidingProvider: 'CAR_PLAY' }).then(
+                    (r) => { write('TEST call accepted ' + json(r)); say('Guidance set to ' + state + ' - look at the strip'); },
+                    (e) => { write('TEST call failed: ' + (e && e.message || e)); say('The car refused it: ' + (e && e.message || e)); });
+            };
+            ui.onClick('BTN_TEST', guard('test on', () => setState('ACTIVE')));
+            ui.onClick('BTN_OFF', guard('test off', () => setState('INACTIVE')));
 
             const fit = (cv, s, size, w, opt) => {
                 s = String(s || '');
