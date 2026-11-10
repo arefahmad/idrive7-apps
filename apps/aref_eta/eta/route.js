@@ -16,6 +16,8 @@
 
 const UNITS = { MILE_US: 'mi', MILE_UK: 'mi', KM: 'km', METER: 'm', FEET: 'ft', YARD: 'yd', 1: 'km', 2: 'mi', 3: 'mi', 4: 'm', 5: 'yd', 6: 'ft' };
 
+// 4294967295 (UInt32 all ones) is the car's "no value"
+const NONE = 4294967295;
 const num = (x) => (typeof x === 'number' && isFinite(x) ? x : (typeof x === 'string' && x.trim() !== '' && isFinite(Number(x)) ? Number(x) : null));
 const enumName = (v) => (v && typeof v === 'object' ? (v.name || v.value || Object.keys(v)[0]) : v);
 
@@ -33,16 +35,17 @@ function finalOf(list) {
 function decode(d) {
     if (!d || typeof d !== 'object') return null;
     const e = d.estimatedArrivalTime || {}, t = e.time || {}, date = e.date || {};
-    const h = num(t.hours), m = num(t.minutes);
-    const arrival = h !== null && m !== null && !date.invalid && (h > 0 || m > 0 || num(d.travelTime) > 0) && h < 24 && m < 60 ? { h: h, m: m } : null;
+    // the car's names: time { invalid, hour, minute, seconds } (G22, iDrive 7); hours / minutes also taken
+    const h = num(t.hour !== undefined ? t.hour : t.hours), m = num(t.minute !== undefined ? t.minute : t.minutes);
+    const arrival = h !== null && m !== null && !date.invalid && !t.invalid && h < 24 && m < 60 ? { h: h, m: m } : null;
     const travel = num(d.travelTime), delay = num(d.delayTime);
     const fd = d.formattedDistance || {};
     const dist = fd.distance !== undefined && fd.distance !== null && String(fd.distance).trim() !== '' ? String(fd.distance).trim() : null;
     const status = String(enumName(d.delayStatus) || '').toUpperCase();
     const out = {
         arrival: arrival,
-        travelSec: travel !== null && travel > 0 && travel < 7 * 86400 ? travel : null,
-        delaySec: delay !== null && delay > 0 && delay < 86400 ? delay : null,
+        travelSec: travel !== null && travel !== NONE && travel > 0 && travel < 7 * 86400 ? travel : null,
+        delaySec: delay !== null && delay !== NONE && delay > 0 && delay < 86400 ? delay : null,
         traffic: status === 'GREEN' ? 'green' : status === 'YELLOW' ? 'yellow' : status === 'RED' ? 'red' : null,
         dist: dist, unit: UNITS[enumName(fd.unit)] || null, rawDist: num(fd.rawDistance),
         final: !!d.isCheckeredFlag,

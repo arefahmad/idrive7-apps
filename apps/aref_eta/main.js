@@ -18,7 +18,7 @@ const mgu = require('./kit/mgu');
 const R = require('./route');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.1.1';
+const VERSION = '0.1.2';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const WATCH = [
