@@ -9,7 +9,9 @@
  * CarPlayManager's guidance flags. Every change goes to eta-probe.log in the data folder (the homelab
  * collects it); the screen shows the trip it would show and the raw values.
  *
- * Read-only: it subscribes to and reads fields; it never calls a method or writes a value.
+ * Test strip (0.2): writes the ETA once into CarPlay's street field (ProjectedModeGuiding.currentRoad), which the
+ * cluster's bottom strip shows: the test of whether the strip can show the ETA. Nothing else is ever written; the
+ * nav app replaces it at the next street, and ending the route clears it.
  * Node 8 only (the car's version). Nothing may throw out of a callback: every callback goes through guard().
  */
 const fs = require('fs');
@@ -18,7 +20,7 @@ const mgu = require('./kit/mgu');
 const R = require('./route');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.1.2';
+const VERSION = '0.2.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const WATCH = [
@@ -39,7 +41,7 @@ mgu.run({
         try {
             const FILE = path.join(ctx.dataDir, 'eta-probe.log');
             const vals = {};              // 'tag.field' -> { v, at, n }
-            const subs = [];
+            const subs = [], proxies = {};
             const json = (v) => { try { return JSON.stringify(v); } catch (e) { return String(v); } };
             const write = (line) => {
                 try {
@@ -60,6 +62,7 @@ mgu.run({
                 w.fields.forEach((f) => { handlers[f] = guard(w.tag + '.' + f, (v) => put(w.tag + '.' + f, v)); });
                 ctx.signals.watch(w.iface, w.inst, handlers, log, { pollMs: 15000 }).then((sub) => {
                     subs.push({ tag: w.tag, available: sub.available, error: sub.error });
+                    if (sub.proxy) proxies[w.tag] = sub.proxy;
                     write('subscribed ' + w.tag + ': ' + (sub.available ? 'available' : 'not available') + (sub.error ? ' (' + sub.error + ')' : ''));
                 }, (e) => { subs.push({ tag: w.tag, available: false, error: e.message }); write('subscribe ' + w.tag + ' failed: ' + e.message); });
             });
@@ -72,6 +75,18 @@ mgu.run({
             let page = 0;
             ui.onClick('BTN_MORE', guard('more', () => { page++; }));
             ui.onClick('BTN_SAVE', guard('mark', () => { write('MARK (button)'); }));
+            // the test: the ETA text into CarPlay's street field once (the cluster's bottom strip shows that field)
+            let note = null;
+            const say = (text) => { note = { text: text, until: Date.now() + 8000 }; };
+            ui.onClick('BTN_TEST', guard('test', () => {
+                const r = trip(), now = Date.now();
+                const text = r ? [R.arrivalText(r, now), R.leftText(r.travelSec), r.dist ? r.dist + ' ' + (r.unit || '') : null].filter(Boolean).join(' \u00b7 ') : 'ETA TEST';
+                if (!proxies.carplay) { say('Not connected to CarPlay guidance yet'); write('TEST no proxy'); return; }
+                write('TEST write currentRoad = ' + JSON.stringify(text));
+                ctx.signals.set(proxies.carplay, 'currentRoad', { elements: [{ text: text }] }).then(
+                    () => { write('TEST write accepted'); say('Sent "' + text + '" - look at the strip'); },
+                    (e) => { write('TEST write failed: ' + (e && e.message || e)); say('The car refused it: ' + (e && e.message || e)); });
+            }));
 
             const fit = (cv, s, size, w, opt) => {
                 s = String(s || '');
@@ -104,6 +119,7 @@ mgu.run({
                 cv.fillRect(40, 168, W - 80, 1, t.dim);
                 rows.slice(pg * PER, pg * PER + PER).forEach((s, i) => cv.text(fit(cv, s, 17, W - 80, L), 40, 196 + i * 27, 17, i % 2 ? t.dim : t.text, L));
                 cv.text('Page ' + (pg + 1) + ' of ' + pages + (pages > 1 ? ' (More)' : '') + '   ·   Every change is saved to eta-probe.log', W - 40, H - 14, 15, t.dim, { align: 'right', literal: true });
+                if (note && Date.now() < note.until) cv.text(fit(cv, note.text, 22, W - 80, B), 40, H - 14, 22, t.accent2 || t.text, B);
                 await ui.image('MAIN_GFX', cv);
             }));
 
