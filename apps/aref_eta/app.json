@@ -1,8 +1,8 @@
 {
   "id": "aref_eta",
   "title": "ETA Bar",
-  "description": "Puts Apple Maps' arrival time in the cluster's bottom strip, between the clock and the drive mode. Shows the arrival time, time and distance left that CarPlay reports, and logs what the car's guidance services send to eta-probe.log. Test: ETA on tells the car's guidance that the CarPlay route is active (the state BMW's own navigation has when the strip shows its ETA); Test: off sets it back.",
-  "version": "0.3.0",
+  "description": "Puts Apple Maps' arrival time in the cluster's bottom strip, between the clock and the drive mode. Shows the arrival time, time and distance left that CarPlay reports, and logs what the car's guidance services send to eta-probe.log. Test A and Test B tell the car's guidance that a route is active with no CarPlay provider (none / other), to see whether the strip then shows the ETA; Test: reset sets back what the car had.",
+  "version": "0.4.0",
   "vendor": "aref",
   "loggingId": "OAR7",
   "startWidget": {
@@ -92,11 +92,15 @@
       "buttons": [
         [
           "BTN_TEST",
-          "Test: ETA on"
+          "Test A: provider none"
+        ],
+        [
+          "BTN_TEST2",
+          "Test B: provider other"
         ],
         [
           "BTN_OFF",
-          "Test: off"
+          "Test: reset"
         ],
         [
           "BTN_MORE",

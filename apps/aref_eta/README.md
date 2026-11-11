@@ -25,12 +25,19 @@ in the app's data folder:
 
 ## The test buttons
 
-During a CarPlay route the car already holds the phone's ETA in BMW's guidance data, but the guidance state
-stays `INACTIVE` and the strip stays empty. **Test: ETA on** tells the guidance service that the CarPlay route
-is `ACTIVE`; **Test: off** sets it back. Start an Apple Maps route, tap **Test: ETA on**, and look at the strip.
+What 0.3 showed: telling the car "CarPlay route active" hides the street, exactly like a real Apple Maps route.
+So the strip switches into guidance mode, but it only fills in the ETA for a route it treats as BMW's own.
+The car already holds Apple Maps' ETA in BMW's guidance data, so 0.4 tests whether a different provider unlocks it.
 
-Tried and ruled out (0.2): writing the ETA into CarPlay's street field. The car takes it, but the strip
-doesn't show it.
+1. Start an Apple Maps route on CarPlay. The street disappears from the strip.
+2. Tap **Test A: provider none**. Look at the strip, then tap **Mark in log**.
+3. Tap **Test B: provider other**. Look at the strip, then tap **Mark in log**.
+4. Tap **Test: reset** to send back what the car had.
+
+Tried and ruled out:
+
+- 0.2: writing the ETA into CarPlay's street field. The car takes it, but the strip doesn't show it.
+- 0.3: setting the CarPlay route to active. It hides the street but shows no ETA.
 
 ## Safety
 
