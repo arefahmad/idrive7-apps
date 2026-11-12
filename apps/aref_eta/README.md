@@ -34,7 +34,7 @@ It needs the **Cluster renderer** tool from the Store (Waze on cluster installs 
 - **Cluster ETA on/off:** turns it on or off. It's on by default.
 - **Preview on cluster:** shows a sample ETA for 30 seconds, with or without a route.
 - **Move up / down / left / right, Bigger, Smaller:** place it. Each tap shows the preview. The place is saved.
-- **Reset place:** goes back to the default place, centred at the bottom.
+- **Reset place:** goes back to the default place, where BMW shows the street name.
 
 Why it's drawn rather than sent to BMW's strip: BMW's strip shows an ETA only for BMW's own navigation. 0.2 to
 0.4 tried CarPlay's street field and the guidance state (provider CarPlay, none and other); none changed it.

@@ -24,7 +24,7 @@ const { Canvas } = require('./kit/canvas');
 
 const IW = 720, IH = 80;                  // the image; the rect on the cluster scales it (bilinear)
 const PREVIEW_MS = 30000;
-const DEF = { on: true, x: 960, y: 682, scale: 1 };   // x, y: the text's centre on the cluster (px); scale of IW x IH
+const DEF = { on: true, x: 968, y: 668, scale: 1 };   // x, y: the text's centre on the cluster (px), where BMW's street name sits (measured on a G-series cluster photo); scale of IW x IH
 const LIMIT = { x: [200, 1720], y: [40, 700], scale: [0.5, 2] };
 const STEP = { x: 20, y: 6, scale: 0.1 };
 
