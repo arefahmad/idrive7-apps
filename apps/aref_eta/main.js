@@ -23,7 +23,7 @@ const { Strip } = require('./strip');
 const LOOK = require('./look');
 const { setImage } = require('./kit/record');
 
-const VERSION = '1.4.0';
+const VERSION = '1.4.1';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out

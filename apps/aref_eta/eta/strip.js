@@ -112,7 +112,7 @@ class Strip {
             this.ref = cr.image({ target: 'panel', klass: 'content', z: 20, x: r.x, y: r.y, w: r.w, h: r.h, iw: IW, ih: IH,
                 sampling: 'bilinear', fps: 2, visible: false });
             this.island = new ISL.Island(cr, this.note);
-            this.island.create(this.cfg.islandMap, IW, IH, 'map');
+            this.island.create(this.cfg.islandMap, IW, IH, 'map', this.style.look);
             cr.connect();
         } catch (e) {
             this.state.client = 'failed: ' + e.message;
@@ -127,6 +127,7 @@ class Strip {
         const first = this.styleKey === undefined;
         this.style = style; this.styleKey = k;
         this.note('style ' + k);
+        if (this.island) this.island.setLook(style.look);
         if (!first) this.preview();
     }
 
@@ -191,8 +192,8 @@ class Strip {
             if (key === this.text && this.pixels && this.streetText) this.text = null;   // (the street name took the bottom layer)
             if (key && key !== this.text) {
                 this.text = key;
-                const img = LOOK.render(p, Object.assign({}, this.style, { look: 'bare' }), this.fonts);
-                this.image = ISL.preview(img, IW, IH);                   // the app screen's preview
+                const img = LOOK.render(p, Object.assign({}, this.style, { look: this.style.look === 'plain' ? 'plain' : 'bare' }), this.fonts);
+                this.image = ISL.preview(img, IW, IH, this.style.look);                   // the app screen's preview
                 if (this.island) this.island.setContent(img);
             }
             const isl = this.isl, I = this.island;
@@ -219,7 +220,7 @@ class Strip {
     sampleImage() {
         const p = LOOK.parts(LOOK.SAMPLE_ROUTE, '6:42 PM', this.style);
         if (this.style.preset !== 'island') return LOOK.render(p, this.style, this.fonts);
-        return ISL.preview(LOOK.render(p, Object.assign({}, this.style, { look: 'bare' }), this.fonts), IW, IH);
+        return ISL.preview(LOOK.render(p, Object.assign({}, this.style, { look: this.style.look === 'plain' ? 'plain' : 'bare' }), this.fonts), IW, IH, this.style.look);
     }
 
     /** On the cluster now (either preset). */

@@ -33,14 +33,28 @@ function keys(t0, t1, n, f, before) {
 const r = (v) => Math.round(v * 1000) / 1000;
 
 function pixels(cv) { return Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length); }
-/** The pill's parts at height h: left cap, middle slice, right cap (black, with the cluster's hairline rim). */
-function parts(h) {
-    const rad = h / 2, rim = [255, 255, 255, 48];
-    const L = new Canvas(Math.ceil(rad), h), R = new Canvas(Math.ceil(rad), h), M = new Canvas(4, h);
+/** The pill's material per look (look.js): fill, rim, and glass's hairline highlight along the top. */
+const MATERIAL = {
+    black: { fill: [0, 0, 0, 255], rim: [255, 255, 255, 48] },
+    smoked: { fill: [0, 0, 0, 115], rim: [255, 255, 255, 30] },          // the map shows through
+    glass: { fill: [255, 255, 255, 18], rim: [255, 255, 255, 40], hi: [255, 255, 255, 70] },
+    outline: { fill: null, rim: [255, 255, 255, 70] },
+    plain: { fill: null, rim: null },                                   // the text alone (with its shadow)
+};
+const material = (look) => MATERIAL[look] || MATERIAL.black;
+
+/** The pill's parts at height h in a look: left cap, middle slice, right cap. */
+function parts(h, look) {
+    const rad = h / 2, m = material(look), rc = Math.ceil(rad);
+    const L = new Canvas(rc, h), R = new Canvas(rc, h), M = new Canvas(4, h);
     [L, R, M].forEach((c) => c.clear([0, 0, 0, 0]));
-    L.roundRect(0, 0, h, h, rad, [0, 0, 0, 255]); L.strokeRoundRect(0.5, 0.5, h - 1, h - 1, rad, 1, rim);
-    R.roundRect(-h + Math.ceil(rad), 0, h, h, rad, [0, 0, 0, 255]); R.strokeRoundRect(-h + Math.ceil(rad) + 0.5, 0.5, h - 1, h - 1, rad, 1, rim);
-    M.fillRect(0, 0, 4, h, [0, 0, 0, 255]); M.fillRect(0, 0, 4, 1, rim); M.fillRect(0, h - 1, 4, 1, rim);
+    [[L, 0], [R, -h + rc]].forEach((q) => {
+        if (m.fill) q[0].roundRect(q[1], 0, h, h, rad, m.fill);
+        if (m.rim) q[0].strokeRoundRect(q[1] + 0.5, 0.5, h - 1, h - 1, rad, 1, m.rim);
+    });
+    if (m.fill) M.fillRect(0, 0, 4, h, m.fill);
+    if (m.rim) { M.fillRect(0, 0, 4, 1, m.rim); M.fillRect(0, h - 1, 4, 1, m.rim); }
+    if (m.hi) M.fillRect(0, 1, 4, 1, m.hi);
     return { L: L, R: R, M: M };
 }
 
@@ -57,13 +71,13 @@ class Island {
     names() { const o = {}; if (this.refs) Object.keys(this.refs).forEach((k) => { o[this.refs[k]] = 'island ' + k; }); return o; }
 
     /** Make the layers (hidden). place: { x: the pill's centre, y: its top, scale }. iw, ih: the text image's size. */
-    create(place, iw, ih, target) {
-        this.place = place; this.iw = iw; this.ih = ih;
+    create(place, iw, ih, target, look) {
+        this.place = place; this.iw = iw; this.ih = ih; this.look = look || 'black';
         // on the map target (Waze on cluster's): joins its picture, takes the map from nobody (contend 0) and leaves
         // the guidance box as Waze set it (guide_hold 0); the panel would cover BMW's own cluster widgets
         const T = target || 'panel', extra = T === 'map' ? { guide_hold: 0, contend: 0 } : {};
         this.h = Math.round(PH * place.scale);
-        const p = parts(this.h), cr = this.cr, g = this.geom();
+        const p = parts(this.h, this.look), cr = this.cr, g = this.geom();
         const mk = (cv, rect, z) => {
             const ref = cr.image(Object.assign({ target: T, klass: 'overlay', z: z, x: rect.x, y: rect.y, w: rect.w, h: rect.h, iw: cv.w, ih: cv.h,
                 sampling: 'bilinear', fps: 2, visible: false }, extra));
@@ -105,11 +119,22 @@ class Island {
         if (!this.refs) return;
         if (rebuild) {
             this.h = Math.round(PH * place.scale);
-            const p = parts(this.h);
-            this.cr.pixels(this.refs.L, null, pixels(p.L)); this.cr.pixels(this.refs.R, null, pixels(p.R)); this.cr.pixels(this.refs.M, null, pixels(p.M));
-            ['L', 'R', 'M'].forEach((k) => this.cr.set(this.refs[k], { iw: p[k].w, ih: p[k].h }));
+            this.repaint();
         }
         this.layout();
+    }
+
+    /** The pill in another look (Settings > Look). */
+    setLook(look) {
+        if (look === this.look) return;
+        this.look = look;
+        if (this.refs) this.repaint();
+    }
+    repaint() {
+        try {
+            const p = parts(this.h, this.look);
+            ['L', 'R', 'M'].forEach((k) => this.cr.pixels(this.refs[k], null, pixels(p[k])));
+        } catch (e) { this.note('island: ' + e.message); }
     }
 
     _stopAll() {
@@ -186,13 +211,15 @@ class Island {
 }
 
 /** The island as one picture, for the app's own screen: the open pill with the text (img: render() 'bare'). */
-function preview(img, iw, ih) {
+function preview(img, iw, ih, look) {
     const h = PH, w = Math.max(h * 2, img.cw + 2 * PAD);
     const cv = new Canvas(Math.max(w + 40, iw), Math.max(h + 40, ih));
     cv.clear([0, 0, 0, 0]);
     const x = (cv.w - w) / 2, y = (cv.h - h) / 2;
-    cv.roundRect(x, y, w, h, h / 2, [0, 0, 0, 255]);
-    cv.strokeRoundRect(x + 0.5, y + 0.5, w - 1, h - 1, h / 2, 1, [255, 255, 255, 48]);
+    const m = material(look);
+    if (m.fill) cv.roundRect(x, y, w, h, h / 2, m.fill);
+    if (m.rim) cv.strokeRoundRect(x + 0.5, y + 0.5, w - 1, h - 1, h / 2, 1, m.rim);
+    if (m.hi) cv.fillRect(x + h / 2, y + 1, w - h, 1, m.hi);
     const src = { w: iw, h: ih, d: img.data };
     // the text image centred (straight alpha over the pill)
     const ox = Math.round((cv.w - iw) / 2), oy = Math.round((cv.h - ih) / 2);
