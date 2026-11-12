@@ -19,7 +19,7 @@ const { ECU } = require('./kit/ecus');
 const FW = require('./watch');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 const W = 1600, H = 520;
 const MASK = 0x0D;                 // status bits asked for: test failed now (0x01), pending (0x04), confirmed (0x08)
 const FIRST_SCAN_MS = 90000;       // after the app starts: let the car's units settle after waking
@@ -141,6 +141,17 @@ mgu.run({
                     tone: active ? 'crit' : keys.length ? 'warn' : 'ok',
                     small: [keys.length ? keys.length + ' faults, ' + active + ' active' : 'No faults', news] };
             });
+            // 0.2.2: Car Watch replaces this app. A copy of the data for Car Watch to bring over on its first start
+            // (/dev/shm: memory only, gone at the next head-unit restart, so install Car Watch before that).
+            const handoff = guard('handoff', () => {
+                const dir = '/dev/shm/aref-handoff-' + ctx.spec.id;
+                try { fs.mkdirSync(dir, 0o755); } catch (e) { /* there already */ }
+                ['faultwatch.json'].forEach((f) => {
+                    try { fs.writeFileSync(path.join(dir, f), fs.readFileSync(path.join(ctx.dataDir, f)), { mode: 0o644 }); fs.chmodSync(path.join(dir, f), 0o644); } catch (e) { /* not written yet */ }
+                });
+            });
+            handoff();
+            setInterval(handoff, 60000);
             log.info('started ' + VERSION + ' (' + state.events.length + ' events kept, ' + state.scans + ' scans so far)');
         } catch (e) {
             log.error('start: ' + (e && e.stack || e));

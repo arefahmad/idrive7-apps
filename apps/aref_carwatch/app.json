@@ -1,0 +1,260 @@
+{
+  "id": "aref_carwatch",
+  "title": "Car Watch",
+  "description": "Misfire Watch, Fault Watch and Drive Log in one app that starts with the car: every misfire per cylinder with the conditions, a timeline of fault codes from every control unit, and every drive's numbers (distance, top speed, 0-60, g, oil and coolant). One process instead of three. On first start it brings over the old apps' history. Read-only.",
+  "version": "0.1.0",
+  "vendor": "aref",
+  "loggingId": "OAR8",
+  "mguAppStartType": "autostart",
+  "startWidget": {
+    "comment": "Home-screen widget (kit/runtime/homewidget.js): the big size is a 384 x 256 picture main.js draws, the small size two text lines.",
+    "name": "Car Watch",
+    "layout": "LT_Table_OnlineApps_DriveRecorderWidget",
+    "image": "BackgroundImage1",
+    "size": [
+      384,
+      256
+    ],
+    "safe": [
+      0.09,
+      0.1
+    ],
+    "cells": {
+      "ErrorInfo": [
+        false,
+        "Bool"
+      ],
+      "background": [
+        true,
+        "Bool"
+      ],
+      "Title": [
+        "",
+        "Text"
+      ],
+      "ProgressbarVisible": [
+        false,
+        "Bool"
+      ],
+      "Progress": [
+        0,
+        "Float"
+      ],
+      "TextRecordings": [
+        "",
+        "Text"
+      ],
+      "TextCam": [
+        "",
+        "Text"
+      ],
+      "TimeElapsed": [
+        "",
+        "Text"
+      ],
+      "TimeRemaining": [
+        "",
+        "Text"
+      ]
+    }
+  },
+  "signals": {
+    "com.harman.infotainment.systemfunctions.tasu.tasu.InternalTasu": {
+      "_instances": "SystemFunctionsInternalTasuInst1",
+      "_methods": [
+        "sendTasuRequest"
+      ],
+      "_broadcasts": [
+        "sendTasuResponse"
+      ]
+    },
+    "de.bmw.infotainment.vehicle.CDS": {
+      "statusEngineSpeed2": "rs",
+      "statusEngineTemperature": "rs"
+    },
+    "de.bmw.infotainment.vehicle.Vehicle2": {
+      "statusCarSpeed2": "rs"
+    },
+    "de.bmw.infrastructure.VehicleInformation": {
+      "statusGearboxDrive": "s",
+      "DataPowerTrain2": "s"
+    },
+    "de.bmw.infotainment.drivingexcitement.FES": {
+      "_optional": "drive mode and engine torque in misfire and fault conditions",
+      "statusFESVehicleDynamicSwitchHMI": "rs",
+      "statusActualValueTorque2": "rs"
+    },
+    "de.bmw.infotainment.vehicle.CDS2": {
+      "statusLongitudinalAccelerationMassCenter": "rs",
+      "statusLateralAccelerationMassCenter": "rs"
+    }
+  },
+  "screens": [
+    {
+      "name": "MAIN",
+      "kind": "canvas",
+      "title": "Car Watch",
+      "buttons": [
+        [
+          "BTN_SECTION",
+          "Show Faults"
+        ],
+        [
+          "MF_VIEW",
+          "Misfire log"
+        ],
+        [
+          "MF_MORE",
+          "More"
+        ],
+        [
+          "MF_SAVE",
+          "Export CSV"
+        ],
+        [
+          "FW_SCAN",
+          "Scan now"
+        ],
+        [
+          "FW_VIEW",
+          "Current faults"
+        ],
+        [
+          "FW_MORE",
+          "More"
+        ],
+        [
+          "DL_VIEW",
+          "History"
+        ],
+        [
+          "DL_DRAGY",
+          "Enter Dragy time"
+        ],
+        [
+          "DL_EXPORT",
+          "Save CSV"
+        ],
+        [
+          "DL_MORE",
+          "More"
+        ],
+        [
+          "DL_UP",
+          "+0.1 s"
+        ],
+        [
+          "DL_DOWN",
+          "-0.1 s"
+        ],
+        [
+          "DL_UP2",
+          "+0.01 s"
+        ],
+        [
+          "DL_DOWN2",
+          "-0.01 s"
+        ],
+        [
+          "DL_SAVE",
+          "Save"
+        ],
+        [
+          "DL_SKIP",
+          "No Dragy time"
+        ],
+        [
+          "BTN_SETTINGS",
+          "Settings"
+        ]
+      ]
+    }
+  ],
+  "settings": [
+    {
+      "key": "theme",
+      "label": "Colours",
+      "type": "choice",
+      "default": "m_tricolour",
+      "options": [
+        [
+          "m_red",
+          "M Red"
+        ],
+        [
+          "m_tricolour",
+          "M Tricolour"
+        ],
+        [
+          "ice",
+          "Ice White"
+        ],
+        [
+          "amber",
+          "Night Amber"
+        ]
+      ]
+    },
+    {
+      "key": "units",
+      "label": "Units",
+      "type": "choice",
+      "default": "us",
+      "options": [
+        [
+          "us",
+          "mph, F"
+        ],
+        [
+          "metric",
+          "km/h, C"
+        ]
+      ]
+    },
+    {
+      "key": "mf_alert",
+      "label": "Misfires: warn at per drive",
+      "type": "number",
+      "default": 10,
+      "steps": [
+        1,
+        5,
+        10,
+        25,
+        50
+      ]
+    },
+    {
+      "key": "mf_every",
+      "label": "Misfires: read every",
+      "type": "number",
+      "unit": "s",
+      "default": 4,
+      "steps": [
+        2,
+        4,
+        8,
+        15
+      ]
+    },
+    {
+      "key": "fw_every",
+      "label": "Faults: scan every",
+      "type": "number",
+      "unit": "min",
+      "default": 10,
+      "steps": [
+        5,
+        10,
+        15,
+        30
+      ]
+    },
+    {
+      "key": "dl_dragy",
+      "label": "Drives: compare with Dragy",
+      "type": "bool",
+      "default": false
+    }
+  ]
+}

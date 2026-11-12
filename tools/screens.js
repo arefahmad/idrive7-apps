@@ -306,9 +306,53 @@ async function explorer() {
     delete process.env.MGU_EXPLORER_ROOT;
 }
 
+async function carWatch() {
+    // the three old apps in one: misfires imported from Misfire Watch's handoff copy, faults and drives from the data folder
+    stubs['./kit/car'] = carStub({ rpm: 2350, speed: 72, gear: 4, coolant: 96, oil: 104, torque: 180, driveMode: 'SPORT' });
+    stubs['./kit/diag'] = Object.assign({}, require(path.join(RUNTIME, 'diag')), {
+        Diag: function () { this.p = {}; this.init = () => Promise.resolve(this); this.functional = () => new Promise(() => {}); },
+    });
+    const now = [0, 1, 2, 0, 0, 0], avg = [0, 0, 1, 0, 0, 0];
+    stubs['./dids'] = { DidReader: function () {
+        this.raws = {};
+        this.monitorKey = (e, m, d) => (d ? 'F6' : 'MID ') + m.toString(16);
+        this.supported = () => Promise.resolve([0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7]);
+        this.monitor = (e, mid) => Promise.resolve([{ tid: 0x0B, value: avg[mid - 0xA2] }, { tid: 0x0C, value: now[mid - 0xA2] }]);
+    } };
+    const c = (rpm, kmh, gear, nm, mode) => ({ rpm, speed: kmh, gear, torque: nm, coolant: 70, mode });
+    const ev = (ago, drive, cyl, n, ctx) => ({ at: tick(ago), drive, cyl, n, ctx, early: false });
+    const events = [ev(86400, 1, 4, 2, c(820, 0, 0, 40)), ev(900, 2, 1, 1, c(900, 0, 0, 30)), ev(240, 2, 3, 1, c(2800, 95, 6, 20, 'COMFORT'))];
+    const d = (id, ago, mins, counts) => ({ id, start: tick(ago), end: tick(ago - mins * 60), counts, first: [0, 0, 0, 0, 0, 0], avg10: avg });
+    const mf = { drive: d(2, 1500, 25, [1, 0, 1, 0, 0, 0]), drives: [d(1, 86400 + 1200, 34, [0, 0, 0, 2, 0, 0])], events, totals: [1, 0, 1, 2, 0, 0],
+        last: { at: tick(60), counts: [1, 0, 1, 0, 0, 0] }, avg10: avg, reads: 812 };
+    const hand = '/dev/shm/aref-handoff-aref_misfire';
+    fs.mkdirSync(hand, { recursive: true });
+    fs.writeFileSync(path.join(hand, 'misfires.json'), JSON.stringify(mf));
+    const last = { at: tick(600), ecus: ['06', '10', '12', '23', '60'], faults: { '06:800BE2': 0x08, '23:D1C604': 0x08, '60:E114D0': 0x08, '60:E11598': 0x08 } };
+    const fev = [{ at: tick(7200), kind: 'new', ecu: '10', code: 'CD0420', status: 0x09, label: 'ACTIVE', ctx: { kmh: 0, gear: 0, rpm: 0 } },
+        { at: tick(3600), kind: 'gone', ecu: '10', code: 'CD0420', status: 0x09, label: 'ACTIVE', ctx: { kmh: 0, gear: 0, rpm: 720 } }];
+    const trip = (ago, km, mins, top) => ({ start: NOW - ago * DAY - mins * 60000, end: NOW - ago * DAY, km, movingMs: mins * 50000, topKmh: top,
+        peakRpm: 3400, maxAccelG: 0.48, maxBrakeG: 0.5, maxLatG: 0.4, oilMax: 107, coolantMax: 96, best060: null, runs060: 0 });
+    const h = harness('aref_carwatch', { files: { 'faultwatch.json': { last, events: fev, scans: 90 },
+        'drivelog.json': { trips: [trip(1, 29, 21, 151), trip(0.2, 11.6, 13, 113)], current: null, runs: [] } } });
+    await h.ready();
+    await new Promise((r) => setTimeout(r, 30));
+    await h.shot('MAIN', 'misfires.png');
+    await h.widget('widget.png');
+    h.clicks.BTN_SECTION(); await h.shot('MAIN', 'faults.png');
+    h.clicks.FW_VIEW(); await h.shot('MAIN', 'faults-current.png');
+    h.clicks.BTN_SECTION(); await h.shot('MAIN', 'drives.png');
+    h.clicks.DL_VIEW(); await h.shot('MAIN', 'drives-history.png');
+    h.clicks.BTN_SECTION(); h.clicks.MF_VIEW(); await h.shot('MAIN', 'misfire-log.png');
+    const imported = fs.existsSync(path.join(h.ctx.dataDir, 'misfires.json'));
+    console.log('car watch: misfires imported ' + imported + ', data in ' + h.ctx.dataDir);
+    fs.unlinkSync(path.join(hand, 'misfires.json')); fs.rmdirSync(hand);
+    delete stubs['./kit/car']; delete stubs['./kit/diag']; delete stubs['./dids'];
+}
+
 (async () => {
     const only = process.argv[2];
-    const all = { carcare: carCare, drivelog: driveLog, faultwatch: faultWatch, carlyrics: carLyrics, explorer, misfire };
+    const all = { carcare: carCare, drivelog: driveLog, faultwatch: faultWatch, carlyrics: carLyrics, explorer, misfire, carwatch: carWatch };
     for (const k of Object.keys(all)) if (!only || only === k) await all[k]();
     Date.now = realNow;
     setTimeout(() => process.exit(0), 100);
