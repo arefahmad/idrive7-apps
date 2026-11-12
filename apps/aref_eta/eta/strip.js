@@ -35,6 +35,7 @@ const LIMIT = { x: [200, 1720], y: [0, 700], scale: [0.5, 2] };
 // the island's schedule (Settings "island_every"): how long it stays open each time it pops out
 const HOLD_MS = 6000;
 const STEP = { x: 20, y: 6, scale: 0.1 };
+const STEP_ISLAND = { x: 40, y: 30 };      // the island moves in bigger steps (it can sit anywhere on the cluster)
 
 function clamp(v, r) { return Math.max(r[0], Math.min(r[1], v)); }
 
@@ -120,6 +121,7 @@ class Strip {
         if (k === this.styleKey) return;
         const first = this.styleKey === undefined;
         this.style = style; this.styleKey = k;
+        this.note('style ' + k);
         if (!first) this.preview();
     }
 
@@ -225,7 +227,12 @@ class Strip {
         } catch (e) { /* next */ }
         this.save();
     }
-    move(dx, dy) { const o = this.spot(); o.x = clamp(o.x + dx * STEP.x, LIMIT.x); o.y = clamp(o.y + dy * STEP.y, LIMIT.y); this.place(); this.preview(); }
+    move(dx, dy) {
+        const o = this.spot(), st = this.style.preset === 'island' ? STEP_ISLAND : STEP;
+        o.x = clamp(o.x + dx * st.x, LIMIT.x); o.y = clamp(o.y + dy * st.y, LIMIT.y);
+        this.note('placed ' + (this.style.preset === 'island' ? 'island' : 'strip') + ' at x ' + o.x + ', y ' + o.y + ', ' + Math.round(o.scale * 100) + '%');
+        this.place(); this.preview();
+    }
     size(d) { const o = this.spot(); o.scale = clamp(Math.round((o.scale + d * STEP.scale) * 10) / 10, LIMIT.scale); this.place(); this.preview(); }
     reset() {
         if (this.style.preset === 'island') this.cfg.island = Object.assign({}, DEF_ISLAND);

@@ -23,7 +23,7 @@ const { Strip } = require('./strip');
 const LOOK = require('./look');
 const { setImage } = require('./kit/record');
 
-const VERSION = '1.3.1';
+const VERSION = '1.3.2';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -123,8 +123,20 @@ mgu.run({
             };
             strip.setStyle(style());
             ctx.settings.onChange(guard('style', () => strip.setStyle(style())));
-            // the street Apple Maps says you're on (CarPlay's currentRoad), for the island preset's bottom strip
-            const road = () => { const v = val('carplay.currentRoad'), e = v && v.elements; return Array.isArray(e) && e.length ? e.map((x) => x && x.text).filter(Boolean).join(' ') || null : null; };
+            // the street you're on, for the island preset's bottom strip: BMW's own map-matched street
+            // (NavigationStatus.currentLocation, which keeps it during a CarPlay route; only the street is kept here,
+            // never the coordinates), else CarPlay's currentRoad (Apple Maps often sends it empty while guiding)
+            let navStreet = null;
+            ctx.signals.watch('de.bmw.infotainment.navigation.navigationstatus.NavigationStatus', '1', {
+                currentLocation: guard('street', (v) => {
+                    const a = v && v.address, st = a && a.street;
+                    const s = st && st.valid !== false && st.text ? String(st.text) : null;
+                    if (s !== navStreet) { navStreet = s; write('street = ' + (s || '-')); }
+                }),
+            }, log, { pollMs: 5000 }).then((sub) => write('subscribed street: ' + (sub.available ? 'available' : 'not available') + (sub.error ? ' (' + sub.error + ')' : '')),
+                (e) => write('subscribe street failed: ' + e.message));
+            const textOf = (v) => { const e = v && v.elements; return Array.isArray(e) && e.length ? e.map((x) => x && x.text).filter(Boolean).join(' ') || null : null; };
+            const road = () => navStreet || textOf(val('carplay.currentRoad'));
             onRoute = guard('strip', () => { const r = stripRoute(); strip.update(r, r ? R.arrivalText(r, Date.now()) : null, road()); });
             setInterval(onRoute, 1000);
             const placed = () => say('Moved. Showing a preview on the cluster for 30 seconds.');

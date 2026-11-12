@@ -62,14 +62,14 @@ class Island {
         this.h = Math.round(PH * place.scale);
         const p = parts(this.h), cr = this.cr, g = this.geom();
         const mk = (cv, rect, z) => {
-            const ref = cr.image({ target: 'panel', klass: 'content', z: z, x: rect.x, y: rect.y, w: rect.w, h: rect.h, iw: cv.w, ih: cv.h,
+            const ref = cr.image({ target: 'panel', klass: 'overlay', z: z, x: rect.x, y: rect.y, w: rect.w, h: rect.h, iw: cv.w, ih: cv.h,
                 sampling: 'bilinear', fps: 2, visible: false });
             cr.pixels(ref, null, pixels(cv));
             return ref;
         };
         this.parts = p;
         this.refs = { L: mk(p.L, g.L, 30), M: mk(p.M, g.M, 30), R: mk(p.R, g.R, 30),
-            T: cr.image({ target: 'panel', klass: 'content', z: 31, x: g.T.x, y: g.T.y, w: g.T.w, h: g.T.h, iw: iw, ih: ih, sampling: 'bilinear', fps: 2, visible: false }) };
+            T: cr.image({ target: 'panel', klass: 'overlay', z: 31, x: g.T.x, y: g.T.y, w: g.T.w, h: g.T.h, iw: iw, ih: ih, sampling: 'bilinear', fps: 2, visible: false }) };
     }
 
     /** The open pill's rects. */
