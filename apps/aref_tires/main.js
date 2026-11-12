@@ -24,7 +24,7 @@ const fonts = require('./kit/fonts');
 const pack = require('./kit/pack');
 const T = require('./decode');
 
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;
 const ARM_MS = 5000;                  // a change button pressed again within this sends it
