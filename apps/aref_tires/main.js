@@ -24,7 +24,7 @@ const fonts = require('./kit/fonts');
 const pack = require('./kit/pack');
 const T = require('./decode');
 
-const VERSION = '0.1.1';
+const VERSION = '0.1.2';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;
 const ARM_MS = 5000;                  // a change button pressed again within this sends it
@@ -32,7 +32,7 @@ const DSC_CHECKS = [1500, 4000];      // ms after a write: DSC read again
 const WATCH = [
     { iface: 'de.bmw.infotainment.vehicle.TPMS', tag: 'tpms', fields: ['statusTyrePressure', 'statusTyreTemperature', 'statusTargetTyrePressure',
         'statusTyreState', 'statusAvailableTypeTyreList', 'statusFrontAxleTyre', 'statusRearAxleTyre', 'statusSummerTyre', 'statusWinterTyre',
-        'statusTyresStatus', 'chassisControl'] },
+        'statusTyresStatus'] },   // chassisControl: written only (the car has no getter for it)
     { iface: 'de.bmw.infotainment.vehicle.TPMSInternalData', tag: 'rdc', fields: ['statusWheelTypeChange', 'tpmsCalibrationData',
         'tpmsErfsActualTireData', 'qrCodeData', 'tyreDataRadioReceiver', 'tpmsInternalLastValues'] },
     { iface: 'de.bmw.infotainment.drivingexcitement.FES', tag: 'fes', fields: ['statusDSCSwitchHMI'] },
@@ -140,7 +140,7 @@ mgu.run({
                     (e) => { note('WRITE failed ' + key + ': ' + (e && e.message || e)); say('The car refused it: ' + (e && e.message || e), 'bad', 8000); });
                 DSC_CHECKS.forEach((ms, i) => setTimeout(guard('dsc check', () => {
                     const d = dscNow();
-                    note('DSC after ' + ms + ' ms: ' + (d ? d.raw : 'unknown') + ' | chassisControl now ' + (vals['tpms.chassisControl'] ? vals['tpms.chassisControl'].s : '-'));
+                    note('DSC after ' + ms + ' ms: ' + (d ? d.raw : 'unknown'));
                     if (d && before && d.raw !== before.raw && !alarm) {
                         alarm = { at: Date.now(), from: before.state, to: d.state, action: key };
                         note('ALARM DSC changed ' + before.raw + ' -> ' + d.raw + ' after ' + key);

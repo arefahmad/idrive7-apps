@@ -399,7 +399,10 @@ def fit_to_unit(manifest, spec, catalog=None):
                 f = fields.get(n)
                 if not isinstance(f, dict) or not isinstance(mode, str):
                     continue
-                left = ''.join(c for c in mode if {'r': 'getter', 's': 'notifier', 'w': 'setter'}.get(c, '') in f or c not in 'rsw')
+                # BMW's IFConfigGenerator wants a getter / setter with a non-zero id ("getter": {"id": 0} is none:
+                # TPMS.chassisControl), a notifier only present
+                has = lambda k: isinstance(f.get(k), dict) and (k == 'notifier' or bool(f[k].get('id')))
+                left = ''.join(c for c in mode if c not in 'rsw' or has({'r': 'getter', 's': 'notifier', 'w': 'setter'}[c]))
                 if left != mode:
                     gone.append('%s (%s)' % (n, ''.join(c for c in mode if c not in left)))
                     if left:
