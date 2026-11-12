@@ -19,9 +19,11 @@ const path = require('path');
 const mgu = require('./kit/mgu');
 const R = require('./route');
 const HW = require('./kit/homewidget');
-const { Strip, parts } = require('./strip');
+const { Strip } = require('./strip');
+const LOOK = require('./look');
+const { setImage } = require('./kit/record');
 
-const VERSION = '1.1.1';
+const VERSION = '1.2.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -40,6 +42,12 @@ const WATCH = [
 mgu.run({
     async start(ctx) {
         const { ui, log } = ctx;
+        // the kit's header, bar and sheets in Apple's dark colours on pure black (the HMI's own black: no seam)
+        const base = require('./kit/themes').theme('m_tricolour');
+        const CARPLAY = Object.assign({}, base, { name: 'CarPlay', bg: '#000000', panelTop: '#1c1c1e', panelBottom: '#1c1c1e', panelEdge: '#38383a',
+            track: '#2c2c2e', tick: '#636366', text: '#ffffff', dim: '#98989f', accent: '#0a84ff', accent2: '#64d2ff', ok: '#30d158', warn: '#ff9f0a',
+            crit: '#ff453a', sel: '#0a84ff', selText: '#ffffff', marker: '#0a84ff', glow: '#0a84ff40', stripes: ['#0a84ff'] });
+        if (ctx.setTheme) ctx.setTheme(() => CARPLAY);
         const guard = (name, fn) => function () {
             try { return fn.apply(this, arguments); } catch (e) { log.error('error in ' + name + ': ' + (e && e.stack || e)); return undefined; }
         };
@@ -94,25 +102,31 @@ mgu.run({
             const guiding = () => val('cpm.projectedGuidanceActive') === true && val('cpm.projectedGuidanceMetadataAvailable') !== false;
 
             let page = 0;
-            ui.onClick('BTN_MORE', guard('more', () => { page++; }));
+            let diag = false;
+            ui.onClick('BTN_MORE', guard('diagnostics', () => { if (!diag) { diag = true; page = 0; } else page++; }));
+            ui.onClick('BTN_BACK', guard('back', () => { diag = false; }));
             // the ETA on the cluster (strip.js)
             let note = null;
             const say = (text) => { note = { text: text, until: Date.now() + 6000 }; };
             const strip = new Strip(ctx, note2);
             strip.start();
-            const stripParts = () => {
+            const stripRoute = () => {
                 const r = trip();
-                if (!guiding() || !r || r.src !== 'carplay') return null;     // BMW's strip is blank only during a CarPlay route
-                return parts(r, R.arrivalText(r, Date.now()));
+                return guiding() && r && r.src === 'carplay' ? r : null;   // BMW's strip is blank only during a CarPlay route
             };
-            const look = () => strip.setLook(ctx.settings.get('look') || 'plain');
-            look();
-            ctx.settings.onChange(guard('look', look));
-            onRoute = guard('strip', () => strip.update(stripParts()));
+            const style = () => {
+                const g = (k, d) => { const v = ctx.settings.get(k); return v === undefined || v === null ? d : v; };
+                const D = LOOK.DEFAULT_STYLE;
+                return { look: g('look', D.look), layout: g('layout', D.layout), traffic: !!g('traffic', D.traffic), ampm: !!g('ampm', D.ampm),
+                    arrival: !!g('show_arrival', D.arrival), minutes: !!g('show_minutes', D.minutes), distance: !!g('show_distance', D.distance) };
+            };
+            strip.setStyle(style());
+            ctx.settings.onChange(guard('style', () => strip.setStyle(style())));
+            onRoute = guard('strip', () => { const r = stripRoute(); strip.update(r, r ? R.arrivalText(r, Date.now()) : null); });
             setInterval(onRoute, 1000);
-            const placed = () => say('Placed: x ' + strip.cfg.x + ', y ' + strip.cfg.y + ', size ' + Math.round(strip.cfg.scale * 100) + '% - preview on the cluster for 30 s');
-            ui.onClick('BTN_TOGGLE', guard('toggle', () => { strip.toggle(); say('ETA on the cluster: ' + (strip.cfg.on ? 'on' : 'off')); }));
-            ui.onClick('BTN_PREVIEW', guard('preview', () => { strip.preview(); say('Preview on the cluster for 30 s'); }));
+            const placed = () => say('Moved. Showing a preview on the cluster for 30 seconds.');
+            ui.onClick('BTN_TOGGLE', guard('toggle', () => { strip.toggle(); say(strip.cfg.on ? 'The ETA will show on the cluster during Apple Maps routes.' : 'The ETA is off. BMW\'s strip stays as it is.'); }));
+            ui.onClick('BTN_PREVIEW', guard('preview', () => { strip.preview(); say('Showing a preview on the cluster for 30 seconds.'); }));
             ui.onClick('BTN_UP', guard('up', () => { strip.move(0, -1); placed(); }));
             ui.onClick('BTN_DOWN', guard('down', () => { strip.move(0, 1); placed(); }));
             ui.onClick('BTN_LEFT', guard('left', () => { strip.move(-1, 0); placed(); }));
@@ -127,33 +141,78 @@ mgu.run({
                 while (s.length > 1 && cv.textWidth(s + '...', size, opt) > w) s = s.slice(0, -1);
                 return s + '...';
             };
-            const TC = { green: '#2fd27a', yellow: '#ffb31a', red: '#ff3b30' };
-            ctx.loop('MAIN', 2, guard('draw', async () => {
-                const t = ctx.theme(), cv = ctx.canvas(W, H).clear(t.bg), L = { literal: true }, B = { font: 'bold', literal: true };
-                const r = trip(), now = Date.now();
-                // the trip, as the bottom strip would show it
-                if (r) {
-                    cv.text(R.arrivalText(r, now) || '--', 40, 110, 72, t.text, B);
-                    cv.text('arrival', 40, 136, 20, t.dim, L);
-                    const parts = [R.leftText(r.travelSec), r.dist ? r.dist + ' ' + (r.unit || '') : null].filter(Boolean).join('   ·   ');
-                    cv.text(parts || '', 420, 100, 40, t.text, B);
-                    if (r.traffic) { cv.circle(430, 135, 9, TC[r.traffic]); cv.text((r.delaySec ? '+' + R.leftText(r.delaySec) + ' traffic' : 'traffic ' + r.traffic), 450, 142, 20, t.dim, L); }
-                    cv.text('from ' + (r.src === 'carplay' ? 'CarPlay' : 'BMW navigation'), W - 40, 60, 18, t.dim, { align: 'right', literal: true });
-                } else {
-                    cv.text(guiding() ? 'CarPlay is guiding, but sends no arrival data' : 'No route', 40, 100, 40, t.text, B);
-                    cv.text(guiding() ? 'Waiting for the route\'s arrival data.' : 'Start a route in Apple Maps on CarPlay: the ETA shows on the cluster.', 40, 136, 20, t.dim, L);
+            // the screen: Apple's dark look on pure black, so it meets the HMI's own black with no seam
+            const C = { bg: '#000000', card: '#1c1c1e', card2: '#2c2c2e', edge: '#38383a', text: '#ffffff', dim: '#98989f', dim2: '#636366',
+                green: '#30d158', orange: '#ff9f0a', red: '#ff453a', blue: '#0a84ff' };
+            const LOOK_NAME = { glass: 'Frosted glass', card: 'Dark card', light: 'Light glass', plain: 'Plain text' };
+            const IMG = 7101;
+            let imgShown = null, sampleImg = null, sampleKey = null;
+            const sample = () => {           // the sample route in the current look (redrawn only when the look changes)
+                if (sampleKey !== strip.styleKey) { sampleKey = strip.styleKey; sampleImg = LOOK.render(LOOK.parts(LOOK.SAMPLE_ROUTE, '6:42 PM', strip.style), strip.style, strip.fonts); }
+                return sampleImg;
+            };
+            const T = { literal: true }, B = { font: strip.fonts.bold, literal: true }, M = { font: strip.fonts.med, literal: true };
+            const stateLine = () => {
+                const s = strip.state;
+                if (!strip.cr) return { c: C.orange, t: 'Install the Cluster renderer tool from the Store', d: s.client };
+                if (!strip.ready) return { c: C.orange, t: 'Connecting to the cluster', d: s.client };
+                if (!strip.cfg.on) return { c: C.dim2, t: 'Off', d: 'Turn it on with On / Off' };
+                if (strip.shown) return { c: C.green, t: Date.now() < strip.previewUntil && !stripRoute() ? 'Preview on the cluster' : 'On the cluster now', d: '' };
+                if (guiding()) return { c: C.orange, t: 'Apple Maps is guiding, waiting for its arrival time', d: 'Some iPhones send it a few seconds after the route starts' };
+                return { c: C.blue, t: 'Ready', d: 'Start a route in Apple Maps. The ETA appears on the cluster by itself.' };
+            };
+            const drawMain = (cv, now) => {
+                // status
+                const st = stateLine();
+                cv.circle(52, 68, 8, st.c);
+                cv.text(fit(cv, st.t, 30, W - 140, B), 72, 79, 30, C.text, B);
+                if (st.d) cv.text(fit(cv, st.d, 20, W - 140, M), 72, 108, 20, C.dim, M);
+                // the cluster preview: what the strip shows, on a strip of black glass
+                const px = 40, py = 128, pw = W - 80, ph = 176;
+                cv.card(px, py, pw, ph, 22, [[0, '#0b0b0d'], [1, '#050506']]);
+                cv.strokeRoundRect(px, py, pw, ph, 22, 1.5, C.edge);
+                cv.text('8:54', px + 120, py + ph / 2 + 11, 30, C.dim2, M);
+                cv.text('COMFORT', px + pw - 120, py + ph / 2 + 11, 26, C.dim2, Object.assign({ align: 'right' }, M));
+                const live = !!stripRoute() || now < strip.previewUntil;
+                const im = live && strip.image ? strip.image : sample();
+                if (im && im !== imgShown) { setImage(IMG, im.w, im.h, im.data); imgShown = im; }
+                if (im) cv.image(IMG, (W - im.w) / 2, py + (ph - im.h) / 2, im.w, im.h);
+                cv.text(stripRoute() ? 'Live' : live ? 'Preview' : 'Sample', px + 22, py + 34, 18, C.dim, M);
+                // the trip
+                const r = trip(), ty = 324, tw = (W - 80 - 32) / 3;
+                const tiles = r ? [['Arrival', R.arrivalText(r, now) || '--'], ['Time left', R.leftText(r.travelSec) || '--'], ['Distance', r.dist ? r.dist + ' ' + (r.unit || '') : '--']]
+                    : [['Look', LOOK_NAME[strip.style.look] || strip.style.look], ['Layout', strip.style.layout === 'stacked' ? 'Stacked' : 'One row'], ['Size', Math.round(strip.cfg.scale * 100) + '%']];
+                tiles.forEach((tl, i) => {
+                    const x = 40 + i * (tw + 16);
+                    cv.roundRect(x, ty, tw, 120, 20, C.card);
+                    cv.text(tl[0], x + 26, ty + 40, 20, C.dim, M);
+                    const c = r && i === 1 && r.traffic ? (r.traffic === 'red' ? C.red : r.traffic === 'yellow' ? C.orange : C.green) : C.text;
+                    cv.text(fit(cv, tl[1], 40, tw - 52, B), x + 26, ty + 92, 40, c, B);
+                });
+                const hint = r ? 'From Apple Maps on CarPlay' : 'Change the look in Settings. Move it with Up, Down, Left and Right.';
+                cv.text(fit(cv, hint, 18, W - 80, M), 40, 484, 18, C.dim2, M);
+                if (note && now < note.until) {
+                    const w = Math.min(W - 80, cv.textWidth(note.text, 20, M) + 48);
+                    cv.roundRect((W - w) / 2, 458, w, 44, 22, C.card2);
+                    cv.text(note.text, W / 2, 487, 20, C.text, Object.assign({ align: 'center' }, M));
                 }
-                cv.text(fit(cv, 'Cluster: ' + (strip.cfg.on ? '' : 'off - ') + strip.status(), 18, W - 80, L), 40, 160, 18, t.dim, L);
-                // the raw values: the probe
+            };
+            const drawDiag = (cv) => {
+                cv.text('Diagnostics', 40, 76, 30, C.text, B);
+                cv.text('What the car\'s guidance services report. Every change is saved to eta-probe.log.', 40, 104, 18, C.dim, M);
+                cv.text(fit(cv, 'Cluster: ' + strip.status(), 18, W - 80, M), 40, 130, 18, C.dim, M);
                 const keys = Object.keys(vals).sort();
                 const rows = keys.map((k) => k + ' = ' + vals[k].s + '  (' + vals[k].n + ')');
                 subs.forEach((s) => { if (!s.available) rows.push(s.tag + ': not available' + (s.error ? ' - ' + s.error : '')); });
                 if (!rows.length) rows.push('Waiting for the car...');
                 const PER = 11, pages = Math.max(1, Math.ceil(rows.length / PER)), pg = page % pages;
-                cv.fillRect(40, 172, W - 80, 1, t.dim);
-                rows.slice(pg * PER, pg * PER + PER).forEach((s, i) => cv.text(fit(cv, s, 17, W - 80, L), 40, 196 + i * 27, 17, i % 2 ? t.dim : t.text, L));
-                cv.text('Page ' + (pg + 1) + ' of ' + pages + (pages > 1 ? ' (More)' : '') + '   ·   Every change is saved to eta-probe.log', W - 40, H - 14, 15, t.dim, { align: 'right', literal: true });
-                if (note && Date.now() < note.until) cv.text(fit(cv, note.text, 22, W - 80, B), 40, H - 14, 22, t.accent2 || t.text, B);
+                cv.roundRect(40, 146, W - 80, 330, 18, C.card);
+                rows.slice(pg * PER, pg * PER + PER).forEach((s, i) => cv.text(fit(cv, s, 17, W - 130, T), 64, 178 + i * 28, 17, i % 2 ? C.dim : C.text, T));
+                cv.text('Page ' + (pg + 1) + ' of ' + pages + '   ·   Diagnostics again: next page   ·   Done: back', W - 40, 500, 16, C.dim2, { align: 'right', literal: true });
+            };
+            ctx.loop('MAIN', 2, guard('draw', async () => {
+                const cv = ctx.canvas(W, H).clear(C.bg), now = Date.now();
+                if (diag) drawDiag(cv); else drawMain(cv, now);
                 await ui.image('MAIN_GFX', cv);
             }));
 

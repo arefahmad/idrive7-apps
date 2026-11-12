@@ -1,8 +1,8 @@
 {
   "id": "aref_eta",
   "title": "ETA Bar",
-  "description": "Apple Maps' arrival time, time left and distance left on the instrument cluster, in the bottom strip's blank space between the clock and the drive mode, during a CarPlay route. Starts with the car. Needs the Cluster renderer tool from the Store. Move, Bigger and Smaller place it; Preview shows a sample for 30 s. Apple Maps style (Inter, like SF Pro): arrival, minutes in traffic colours, miles; Settings > Cluster look picks plain or a dark card. Logs what the car's guidance services send to eta-probe.log.",
-  "version": "1.1.1",
+  "description": "Apple Maps' arrival time, time left and distance on the instrument cluster, in the bottom strip's blank space between the clock and the drive mode, while Apple Maps guides on CarPlay. Looks like Apple made it: frosted glass, dark card, light glass or plain text, in one row or stacked like Apple Maps' ETA card. Updates with every route change. Starts with the car. Needs the Cluster renderer tool from the Store.",
+  "version": "1.2.0",
   "vendor": "aref",
   "loggingId": "OAR7",
   "mguAppStartType": "autostart",
@@ -90,27 +90,27 @@
       "buttons": [
         [
           "BTN_TOGGLE",
-          "Cluster ETA on/off"
+          "On / Off"
         ],
         [
           "BTN_PREVIEW",
-          "Preview on cluster"
+          "Preview"
         ],
         [
           "BTN_UP",
-          "Move up"
+          "Up"
         ],
         [
           "BTN_DOWN",
-          "Move down"
+          "Down"
         ],
         [
           "BTN_LEFT",
-          "Move left"
+          "Left"
         ],
         [
           "BTN_RIGHT",
-          "Move right"
+          "Right"
         ],
         [
           "BTN_BIGGER",
@@ -122,11 +122,15 @@
         ],
         [
           "BTN_RESET",
-          "Reset place"
+          "Reset"
         ],
         [
           "BTN_MORE",
-          "More"
+          "Diagnostics"
+        ],
+        [
+          "BTN_BACK",
+          "Done"
         ],
         [
           "BTN_SETTINGS",
@@ -138,43 +142,77 @@
   "settings": [
     {
       "key": "look",
-      "label": "Cluster look",
+      "label": "Look",
       "type": "choice",
-      "default": "plain",
+      "default": "glass",
       "options": [
         [
-          "plain",
-          "Apple Maps (plain)"
+          "glass",
+          "Frosted glass"
         ],
         [
           "card",
-          "Apple Maps (dark card)"
+          "Dark card"
+        ],
+        [
+          "light",
+          "Light glass"
+        ],
+        [
+          "plain",
+          "Plain text"
         ]
       ]
     },
     {
-      "key": "theme",
-      "label": "Colours",
+      "key": "layout",
+      "label": "Layout",
       "type": "choice",
-      "default": "m_tricolour",
+      "default": "row",
       "options": [
         [
-          "m_red",
-          "M Red"
+          "row",
+          "One row"
         ],
         [
-          "m_tricolour",
-          "M Tricolour"
-        ],
-        [
-          "ice",
-          "Ice White"
-        ],
-        [
-          "amber",
-          "Night Amber"
+          "stacked",
+          "Stacked (Apple Maps card)"
         ]
       ]
+    },
+    {
+      "key": "show_arrival",
+      "label": "Show arrival time",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "show_minutes",
+      "label": "Show time left",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "show_distance",
+      "label": "Show distance left",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "traffic",
+      "label": "Traffic colours on time left",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "ampm",
+      "label": "Show AM / PM",
+      "type": "bool",
+      "default": false
     }
+  ],
+  "repoCredit": false,
+  "retiredSettings": [
+    "theme"
   ]
 }

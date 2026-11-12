@@ -2,7 +2,7 @@
   "id": "aref_carwatch",
   "title": "Car Watch",
   "description": "Misfire Watch, Fault Watch and Drive Log in one app that starts with the car: every misfire per cylinder with the conditions, a timeline of fault codes from every control unit, and every drive's numbers (distance, top speed, 0-60, g, oil and coolant). One process instead of three. On first start it brings over the old apps' history. Read-only.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "vendor": "aref",
   "loggingId": "OAR8",
   "mguAppStartType": "autostart",

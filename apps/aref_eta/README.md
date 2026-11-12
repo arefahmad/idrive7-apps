@@ -19,8 +19,8 @@ Maps seems to leave them empty on iDrive 7.
 This version watches those fields and CarPlay's guidance flags and writes every change to `eta-probe.log`
 in the app's data folder:
 
-- **Screen:** the arrival time, time left, distance left and traffic it would show, and every raw value.
-- **Mark in log:** writes a marker line (tap it when you start or end a route, to find it in the log).
+- **Screen:** whether the ETA is on the cluster, a live preview of it in your chosen look, and the trip (arrival, time left, distance).
+- **Diagnostics:** every raw value the car's guidance services report (tap again for the next page; Done goes back).
 - **Home-screen widget:** the arrival time and what's left.
 
 ## The ETA on the cluster (1.0)
@@ -31,25 +31,31 @@ the route ends, so BMW's street name comes back.
 
 It needs the **Cluster renderer** tool from the Store (Waze on cluster installs it too).
 
-- **Cluster ETA on/off:** turns it on or off. It's on by default.
-- **Preview on cluster:** shows a sample ETA for 30 seconds, with or without a route.
-- **Move up / down / left / right, Bigger, Smaller:** place it. Each tap shows the preview. The place is saved.
-- **Reset place:** goes back to the default place, where BMW shows the street name.
+- **On / Off:** turns it on or off. It's on by default.
+- **Preview:** shows a sample ETA for 30 seconds, with or without a route.
+- **Up, Down, Left, Right, Bigger, Smaller:** place it. Each tap shows the preview. The place is saved.
+- **Reset:** goes back to the default place, where BMW shows the street name.
 
-### Updates (1.1.1)
+### Updates
 
 The ETA redraws the moment the phone sends new route numbers (about every second while Apple Maps guides), so a
 wrong turn shows Apple Maps' new arrival, minutes and miles as soon as it reroutes. If the phone stops sending the
 route (CarPlay's guidance metadata goes off), the ETA hides instead of showing old numbers.
 
-### Look (1.1)
+### Looks (1.2)
 
-Apple Maps' style: `6:42 arrival   23 min   14.2 mi`. Values in Inter Bold (the open look-alike of Apple's SF Pro,
-the same atlases as Car Lyrics), units in Apple's secondary gray, and the minutes in Apple's traffic colours
-(green, orange, red) when the car reports traffic. Over an hour shows as `1:12 hr`. **Settings > Cluster look**
-picks plain text (default) or a dark rounded card like CarPlay's dashboard cards.
-Preview: [docs/screenshots/aref_eta/cluster-looks.png](../../docs/screenshots/aref_eta/cluster-looks.png)
-(the clock and drive mode there are stand-ins).
+Designed to look like Apple made it: Inter (the open look-alike of SF Pro), Apple's dark-mode label colours and
+system traffic colours, and Apple's materials. **Settings:**
+
+- **Look:** Frosted glass (default: a smoky translucent platter the cluster shows through, a top sheen and a bright
+  rim), Dark card (CarPlay's dark platter), Light glass (for daytime) or Plain text.
+- **Layout:** one row (`6:42 arrival  23 min  14.2 mi`) or stacked like Apple Maps' ETA card.
+- **Show** arrival, time left and distance each on or off; **traffic colours** on time left; **AM / PM**.
+
+The layer can't read the cluster's picture under it, so the glass is a tint rather than a real blur. Each look is
+drawn only when a number or a setting changes (a few ms), never per frame, so it adds no lag.
+Previews: [cluster looks](../../docs/screenshots/aref_eta/cluster-looks.png) (clock and drive mode are stand-ins),
+[app screen](../../docs/screenshots/aref_eta/app-glass.png).
 
 Why it's drawn rather than sent to BMW's strip: BMW's strip shows an ETA only for BMW's own navigation. 0.2 to
 0.4 tried CarPlay's street field and the guidance state (provider CarPlay, none and other); none changed it.

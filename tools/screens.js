@@ -350,9 +350,42 @@ async function carWatch() {
     delete stubs['./kit/car']; delete stubs['./kit/diag']; delete stubs['./dids'];
 }
 
+async function eta() {
+    // a stand-in for the Cluster renderer tool: accepts the layer and says it's shown
+    const EventEmitter = require('events');
+    class FakeCR extends EventEmitter {
+        image() { return 1; } pixels() {} set() {}
+        connect() { setImmediate(() => this.emit('ready')); }
+    }
+    stubs['./kit/cluster_render'] = { loadClient: () => ({ ClusterRender: FakeCR, sock: '/dev/null' }) };
+    const route = (on) => ({
+        waypoints: on ? [{ isCheckeredFlag: true, travelTime: 23 * 60 + 10, delayTime: 0, delayStatus: 'GREEN',
+            estimatedArrivalTime: { date: { invalid: false, year: 2026, month: 11, day: 12 }, time: { invalid: false, hour: 18, minute: 42, seconds: 0 } },
+            formattedDistance: { distance: '14.2', unit: 'MILE_US', rawDistance: 22850 } }] : [],
+    });
+    let guiding = false;
+    const signals = {
+        watch: (iface, inst, h) => {
+            if (/ProjectedModeGuiding$/.test(iface)) h.waypoints(route(guiding).waypoints);
+            if (/CarPlayManager$/.test(iface)) { h.projectedGuidanceActive(guiding); h.projectedGuidanceMetadataAvailable(guiding); }
+            return Promise.resolve({ available: true, error: null });
+        },
+    };
+    const own = { scale: 1.165, ox: 70, oy: 36, extra: 53 };
+    for (const look of ['glass', 'card', 'light', 'plain']) {
+        guiding = look === 'glass' || look === 'card';
+        const h = harness('aref_eta', { signals, own, settings: { look, layout: look === 'card' ? 'stacked' : 'row' } });
+        await h.ready();
+        await new Promise((r) => setTimeout(r, 1100));
+        await h.shot('MAIN', 'app-' + look + '.png');
+        if (look === 'glass') { h.clicks.BTN_MORE(); await h.shot('MAIN', 'diagnostics.png'); h.clicks.BTN_BACK(); await h.widget('widget.png'); }
+    }
+    delete stubs['./kit/cluster_render'];
+}
+
 (async () => {
     const only = process.argv[2];
-    const all = { carcare: carCare, drivelog: driveLog, faultwatch: faultWatch, carlyrics: carLyrics, explorer, misfire, carwatch: carWatch };
+    const all = { carcare: carCare, drivelog: driveLog, faultwatch: faultWatch, carlyrics: carLyrics, explorer, misfire, carwatch: carWatch, eta };
     for (const k of Object.keys(all)) if (!only || only === k) await all[k]();
     Date.now = realNow;
     setTimeout(() => process.exit(0), 100);
