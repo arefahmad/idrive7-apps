@@ -25,11 +25,15 @@ const fonts = require('./kit/fonts');
 const pack = require('./kit/pack');
 
 const LOOK = require('./look');
+const ISL = require('./island');
 const IW = LOOK.IW, IH = LOOK.IH;         // the image; the rect on the cluster scales it (bilinear)
 const PREVIEW_MS = 30000;
 const MAP_WAIT_MS = 3000;            // longest the ETA waits for the cluster's map to come up
 const DEF = { on: true, x: 968, y: 668, scale: 1 };   // x, y: the picture's centre on the cluster (px), where BMW's street name sits (measured on a G-series cluster photo); scale of IW x IH
-const LIMIT = { x: [200, 1720], y: [40, 700], scale: [0.5, 2] };
+const DEF_ISLAND = { x: 960, y: 12, scale: 1 };   // the island: its centre x and top y (under the driver attention camera, top middle)
+const LIMIT = { x: [200, 1720], y: [0, 700], scale: [0.5, 2] };
+// the island's schedule (Settings "island_every"): how long it stays open each time it pops out
+const HOLD_MS = 6000;
 const STEP = { x: 20, y: 6, scale: 0.1 };
 
 function clamp(v, r) { return Math.max(r[0], Math.min(r[1], v)); }
@@ -44,6 +48,8 @@ class Strip {
         this.cr = null; this.ref = null; this.ready = false;
         this.text = null; this.shown = false; this.previewUntil = 0;
         this.map = { state: null, at: 0 }; this.pending = null;
+        this.cfg.island = Object.assign({}, DEF_ISLAND, this.cfg.island);
+        this.island = null; this.isl = { active: false, lastPop: 0, arrival: null, img: null };
         this.style = Object.assign({}, LOOK.DEFAULT_STYLE); this.styleKey = undefined; this.image = null;
         this.state = { client: 'starting', layer: '', target: '', reason: '' };
         // Inter (OFL), the open look-alike of Apple's SF Pro (Car Lyrics' atlases): data/fonts -> fonts.pack
@@ -97,6 +103,8 @@ class Strip {
             const r = this.rect();
             this.ref = cr.image({ target: 'panel', klass: 'content', z: 20, x: r.x, y: r.y, w: r.w, h: r.h, iw: IW, ih: IH,
                 sampling: 'bilinear', fps: 2, visible: false });
+            this.island = new ISL.Island(cr, this.note);
+            this.island.create(this.cfg.island, IW, IH);
             cr.connect();
         } catch (e) {
             this.state.client = 'failed: ' + e.message;
@@ -115,6 +123,8 @@ class Strip {
 
     /** Called on every route update and each second: route (route.js pick(), null: nothing to show), arrival text. */
     update(route, arrival) {
+        if (this.style.preset === 'island') return this.updateIsland(route, arrival);
+        if (this.isl.active || (this.island && this.island.open)) { this.isl.active = false; if (this.island) this.island.hide(); this.text = null; }
         const preview = Date.now() < this.previewUntil;
         const p = route ? LOOK.parts(route, arrival, this.style) : preview ? LOOK.parts(LOOK.SAMPLE_ROUTE, '6:42 PM', this.style) : null;
         const want = !!(this.cfg.on && p && (route || preview));
@@ -146,18 +156,77 @@ class Strip {
         } catch (e) { this.state.reason = 'draw: ' + e.message; }
     }
 
-    place() { try { const r = this.rect(); if (this.cr && this.ref) this.cr.set(this.ref, { x: r.x, y: r.y, w: r.w, h: r.h }); } catch (e) { /* next */ } this.save(); }
-    move(dx, dy) { this.cfg.x = clamp(this.cfg.x + dx * STEP.x, LIMIT.x); this.cfg.y = clamp(this.cfg.y + dy * STEP.y, LIMIT.y); this.place(); this.preview(); }
-    size(d) { this.cfg.scale = clamp(Math.round((this.cfg.scale + d * STEP.scale) * 10) / 10, LIMIT.scale); this.place(); this.preview(); }
-    reset() { this.cfg = Object.assign({}, DEF, { on: this.cfg.on }); this.place(); this.preview(); }
+    /** The island preset: pops out of the camera on the schedule, shrinks back in between (island.js). */
+    updateIsland(route, arrival) {
+        const now = Date.now(), preview = now < this.previewUntil;
+        const p = route ? LOOK.parts(route, arrival, this.style) : preview ? LOOK.parts(LOOK.SAMPLE_ROUTE, '6:42 PM', this.style) : null;
+        const want = !!(this.cfg.on && p && (route || preview));
+        try {
+            if (this.shown && this.cr && this.ref) { this.shown = false; this.cr.set(this.ref, { visible: false }); }   // the bottom one
+            const key = p ? 'i' + JSON.stringify(p) + this.styleKey : null;
+            if (key && key !== this.text) {
+                this.text = key;
+                const img = LOOK.render(p, Object.assign({}, this.style, { look: 'bare' }), this.fonts);
+                this.image = ISL.preview(img, IW, IH);                   // the app screen's preview
+                if (this.island) this.island.setContent(img);
+            }
+            const isl = this.isl, I = this.island;
+            if (!I) return;
+            if (!want) {
+                if (isl.active) { isl.active = false; I.close(); this.note('island: close (route ended)'); }
+                return;
+            }
+            const every = this.style.every || 'stay';
+            if (!isl.active) {                                            // a route (or the preview) begins: pop out
+                isl.active = true; isl.lastPop = now; isl.arrival = arrival; I.pop();
+                this.note('island: pop ' + p.map((q) => q.v + (q.u ? ' ' + q.u : '')).join(' · ') + ' (' + every + ')');
+                return;
+            }
+            if (preview || every === 'stay') { if (!I.open) { I.pop(); isl.lastPop = now; } return; }
+            const sec = Number(every), hold = every === 'change' ? HOLD_MS + 2000 : Math.min(HOLD_MS, Math.max(3000, sec * 500));
+            if (I.open) { if (now - isl.lastPop >= hold) I.close(); return; }
+            const due = every === 'change' ? arrival !== isl.arrival : now - isl.lastPop >= sec * 1000;
+            if (due) { isl.lastPop = now; isl.arrival = arrival; I.pop(); }
+        } catch (e) { this.state.reason = 'island: ' + e.message; }
+    }
+
+    /** The sample route in the current look, for the app's screen. */
+    sampleImage() {
+        const p = LOOK.parts(LOOK.SAMPLE_ROUTE, '6:42 PM', this.style);
+        if (this.style.preset !== 'island') return LOOK.render(p, this.style, this.fonts);
+        return ISL.preview(LOOK.render(p, Object.assign({}, this.style, { look: 'bare' }), this.fonts), IW, IH);
+    }
+
+    /** On the cluster now (either preset). */
+    showing() { return !!(this.shown || (this.island && this.island.open) || this.isl.active); }
+
+    /** Where the current preset sits: the bottom strip's place (cfg) or the island's (cfg.island). */
+    spot() { return this.style.preset === 'island' ? this.cfg.island : this.cfg; }
+
+    place() {
+        try {
+            const r = this.rect();
+            if (this.cr && this.ref) this.cr.set(this.ref, { x: r.x, y: r.y, w: r.w, h: r.h });
+            if (this.island) this.island.move(this.cfg.island);
+        } catch (e) { /* next */ }
+        this.save();
+    }
+    move(dx, dy) { const o = this.spot(); o.x = clamp(o.x + dx * STEP.x, LIMIT.x); o.y = clamp(o.y + dy * STEP.y, LIMIT.y); this.place(); this.preview(); }
+    size(d) { const o = this.spot(); o.scale = clamp(Math.round((o.scale + d * STEP.scale) * 10) / 10, LIMIT.scale); this.place(); this.preview(); }
+    reset() {
+        if (this.style.preset === 'island') this.cfg.island = Object.assign({}, DEF_ISLAND);
+        else this.cfg = Object.assign({}, DEF, { on: this.cfg.on, island: this.cfg.island });
+        this.place(); this.preview();
+    }
     toggle() { this.cfg.on = !this.cfg.on; this.save(); this.note('cluster ETA ' + (this.cfg.on ? 'on' : 'off')); }
-    preview() { this.previewUntil = Date.now() + PREVIEW_MS; }
+    preview() { this.previewUntil = Date.now() + PREVIEW_MS; if (this.style.preset === 'island' && this.island && this.island.open) { this.island.close(); this.isl.active = false; } }
 
     status() {
         const s = this.state;
         if (!this.cr) return s.client;
         if (!this.ready) return 'Cluster renderer: ' + s.client;
-        return (this.shown ? 'On the cluster' : 'Hidden') + (s.layer ? ' - layer ' + s.layer : '') + (s.target ? ', panel ' + s.target : '') + (s.reason ? ' - ' + s.reason : '');
+        const on = this.shown || (this.island && this.island.open) || this.isl.active;
+        return (on ? 'On the cluster' : 'Hidden') + (s.layer ? ' - layer ' + s.layer : '') + (s.target ? ', panel ' + s.target : '') + (s.reason ? ' - ' + s.reason : '');
     }
 }
 

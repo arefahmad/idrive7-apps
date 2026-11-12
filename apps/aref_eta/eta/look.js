@@ -7,11 +7,11 @@
  *   render(parts, style, fonts)   -> { w, h, data } RGBA (straight alpha), w x h = IW x IH
  *
  * style: { look, layout, traffic, ampm, arrival, minutes, distance }
- *   look    plain  text straight on the strip, with a soft shadow
- *           card   CarPlay's dark platter: solid #1C1C1E-ish, rounded, a hairline rim and a drop shadow
- *           glass  frosted glass: a translucent smoky tint the cluster's map shows through, a top sheen,
- *                  a bright rim and a drop shadow (the layer can't read the map under it, so no real blur)
- *           light  Apple's light material: white glass, dark text (for daytime)
+ *   look    plain    text straight on the strip, with a soft shadow
+ *           black    the cluster's own black, rounded, with a hairline rim (as its dividers) and a drop shadow
+ *           smoked   the same black, see-through: the cluster's picture shows through it
+ *           outline  no fill, a thin rim only
+ *           bare     text only, no shadow (the island draws its own black pill: island.js)
  *   layout  row      6:42 arrival   23 min   14.2 mi
  *           stacked  Apple Maps' ETA card: the values in a row, their labels small underneath
  *
@@ -20,16 +20,17 @@
 const { Canvas } = require('./kit/canvas');
 
 const IW = 800, IH = 112;
-const LOOKS = ['plain', 'card', 'glass', 'light'];
+const LOOKS = ['plain', 'black', 'smoked', 'outline'];
+// looks an older version saved, and what they are now
+const OLD_LOOK = { card: 'black', glass: 'smoked', light: 'outline' };
+const lookOf = (l) => OLD_LOOK[l] || (LOOKS.indexOf(l) >= 0 || l === 'bare' ? l : 'black');
 const LAYOUTS = ['row', 'stacked'];
-const DEFAULT_STYLE = { look: 'glass', layout: 'row', traffic: true, ampm: false, arrival: true, minutes: true, distance: true };
+const DEFAULT_STYLE = { look: 'black', layout: 'row', traffic: true, ampm: false, arrival: true, minutes: true, distance: true };
 
-// Apple's dark-mode colours: label, secondaryLabel; light-mode label / secondaryLabel; system green / orange / red
+// Apple's dark-mode colours: label, secondaryLabel; system green / orange / red
 const DARK = { v: [255, 255, 255, 255], u: [152, 152, 159, 255] };
-const LIGHT = { v: [0, 0, 0, 255], u: [96, 96, 102, 255] };
 const TRAFFIC = {
     dark: { green: [48, 209, 88, 255], yellow: [255, 159, 10, 255], red: [255, 69, 58, 255] },
-    light: { green: [36, 160, 66, 255], yellow: [222, 128, 0, 255], red: [225, 40, 30, 255] },
 };
 const SAMPLE_ROUTE = { travelSec: 23 * 60, traffic: 'green', dist: '14.2', unit: 'mi' };
 
@@ -44,7 +45,9 @@ function parts(r, arrival, style) {
     }
     if (s.minutes && (r.travelSec || r.travelSec === 0)) {
         const m = Math.max(0, Math.round(r.travelSec / 60));
-        const c = s.traffic ? r.traffic : null;
+        // Apple Maps shows the time left green when on time, orange / red with delays: the car often sends no
+        // traffic status for CarPlay routes (UNDEFINED), so that reads as on time
+        const c = s.traffic ? r.traffic || 'green' : null;
         out.push(m < 60 ? { v: String(m), u: 'min', c: c, k: 'min', label: 'min' }
             : { v: Math.floor(m / 60) + ':' + (m % 60 < 10 ? '0' : '') + (m % 60), u: 'hr', c: c, k: 'min', label: 'hr' });
     }
@@ -90,8 +93,8 @@ function render(ps, style, fontNames) {
     if (!ps || !ps.length) return { w: IW, h: IH, data: Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length) };
     const stacked = s.layout === 'stacked';
     const F = { bold: fn.bold, med: fn.med, vs: 40, us: 26, ls: 21 };
-    const light = s.look === 'light';
-    const col = light ? LIGHT : DARK, tc = TRAFFIC[light ? 'light' : 'dark'];
+    s.look = lookOf(s.look);
+    const col = DARK, tc = TRAFFIC.dark;
     const V = { font: F.bold, literal: true }, U = { font: F.med, literal: true };
 
     // content size
@@ -106,20 +109,16 @@ function render(ps, style, fontNames) {
     const pw = Math.min(IW - 24, Math.round(cw + padX * 2)), ph = Math.round(ch + padY * 2);
     const px = Math.round((IW - pw) / 2), py = Math.round((IH - ph) / 2) - 2;
     const rad = Math.min(ph / 2, 26);
-    if (s.look === 'card') {
-        shadow(cv, px, py, pw, ph, rad, 14, 4, 0.55);
-        cv.card(px, py, pw, ph, rad, [[0, [44, 44, 48, 250]], [1, [30, 30, 33, 250]]]);
-        cv.strokeRoundRect(px + 0.5, py + 0.5, pw - 1, ph - 1, rad, 1, [255, 255, 255, 26]);
-    } else if (s.look === 'glass') {
-        shadow(cv, px, py, pw, ph, rad, 16, 5, 0.45);
-        // a smoky tint the map shows through, lighter at the top like light caught in frosted glass
-        cv.card(px, py, pw, ph, rad, [[0, [86, 88, 96, 150]], [0.5, [52, 54, 60, 135]], [1, [40, 41, 46, 150]]]);
-        cv.card(px + 1, py + 1, pw - 2, Math.round(ph * 0.48), rad - 1, [[0, [255, 255, 255, 34]], [1, [255, 255, 255, 0]]]);
-        cv.strokeRoundRect(px + 0.5, py + 0.5, pw - 1, ph - 1, rad, 1.2, [255, 255, 255, 60]);
-    } else if (s.look === 'light') {
-        shadow(cv, px, py, pw, ph, rad, 14, 4, 0.40);
-        cv.card(px, py, pw, ph, rad, [[0, [252, 252, 253, 235]], [1, [236, 236, 240, 228]]]);
-        cv.strokeRoundRect(px + 0.5, py + 0.5, pw - 1, ph - 1, rad, 1, [255, 255, 255, 140]);
+    // the platters use only what the cluster itself shows: its black, and a hairline like its own dividers
+    if (s.look === 'black') {
+        shadow(cv, px, py, pw, ph, rad, 12, 3, 0.5);
+        cv.roundRect(px, py, pw, ph, rad, [0, 0, 0, 255]);
+        cv.strokeRoundRect(px + 0.5, py + 0.5, pw - 1, ph - 1, rad, 1, [255, 255, 255, 30]);
+    } else if (s.look === 'smoked') {
+        cv.roundRect(px, py, pw, ph, rad, [0, 0, 0, 170]);
+        cv.strokeRoundRect(px + 0.5, py + 0.5, pw - 1, ph - 1, rad, 1, [255, 255, 255, 22]);
+    } else if (s.look === 'outline') {
+        cv.strokeRoundRect(px + 0.75, py + 0.75, pw - 1.5, ph - 1.5, rad, 1.5, [255, 255, 255, 64]);
     }
 
     // the text, centred in the platter
@@ -150,7 +149,7 @@ function render(ps, style, fontNames) {
             x += SEP;
         });
     }
-    return { w: IW, h: IH, data: Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length) };
+    return { w: IW, h: IH, data: Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length), cw: Math.round(cw), ch: ch };
 }
 
-module.exports = { IW, IH, LOOKS, LAYOUTS, DEFAULT_STYLE, SAMPLE_ROUTE, parts, render };
+module.exports = { IW, IH, LOOKS, LAYOUTS, DEFAULT_STYLE, SAMPLE_ROUTE, parts, render, lookOf, shadow };

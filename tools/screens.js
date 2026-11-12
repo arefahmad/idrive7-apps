@@ -372,13 +372,13 @@ async function eta() {
         },
     };
     const own = { scale: 1.165, ox: 70, oy: 36, extra: 53 };
-    for (const look of ['glass', 'card', 'light', 'plain']) {
-        guiding = look === 'glass' || look === 'card';
-        const h = harness('aref_eta', { signals, own, settings: { look, layout: look === 'card' ? 'stacked' : 'row' } });
+    for (const look of ['black', 'smoked', 'outline', 'plain', 'island']) {
+        guiding = look === 'black' || look === 'island';
+        const h = harness('aref_eta', { signals, own, settings: look === 'island' ? { preset: 'island', island_every: '30' } : { look, layout: look === 'smoked' ? 'stacked' : 'row' } });
         await h.ready();
         await new Promise((r) => setTimeout(r, 1100));
         await h.shot('MAIN', 'app-' + look + '.png');
-        if (look === 'glass') { h.clicks.BTN_MORE(); await h.shot('MAIN', 'diagnostics.png'); h.clicks.BTN_BACK(); await h.widget('widget.png'); }
+        if (look === 'black') { h.clicks.BTN_MORE(); await h.shot('MAIN', 'diagnostics.png'); h.clicks.BTN_BACK(); await h.widget('widget.png'); }
     }
     delete stubs['./kit/cluster_render'];
 }

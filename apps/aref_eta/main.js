@@ -23,7 +23,7 @@ const { Strip } = require('./strip');
 const LOOK = require('./look');
 const { setImage } = require('./kit/record');
 
-const VERSION = '1.2.1';
+const VERSION = '1.3.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -117,7 +117,7 @@ mgu.run({
             const style = () => {
                 const g = (k, d) => { const v = ctx.settings.get(k); return v === undefined || v === null ? d : v; };
                 const D = LOOK.DEFAULT_STYLE;
-                return { look: g('look', D.look), layout: g('layout', D.layout), traffic: !!g('traffic', D.traffic), ampm: !!g('ampm', D.ampm),
+                return { preset: g('preset', 'bottom'), every: String(g('island_every', 'stay')), look: LOOK.lookOf(g('look', D.look)), layout: g('layout', D.layout), traffic: !!g('traffic', D.traffic), ampm: !!g('ampm', D.ampm),
                     arrival: !!g('show_arrival', D.arrival), minutes: !!g('show_minutes', D.minutes), distance: !!g('show_distance', D.distance) };
             };
             strip.setStyle(style());
@@ -144,11 +144,12 @@ mgu.run({
             // the screen: Apple's dark look on pure black, so it meets the HMI's own black with no seam
             const C = { bg: '#000000', card: '#1c1c1e', card2: '#2c2c2e', edge: '#38383a', text: '#ffffff', dim: '#98989f', dim2: '#636366',
                 green: '#30d158', orange: '#ff9f0a', red: '#ff453a', blue: '#0a84ff' };
-            const LOOK_NAME = { glass: 'Frosted glass', card: 'Dark card', light: 'Light glass', plain: 'Plain text' };
+            const LOOK_NAME = { black: 'Black', smoked: 'Smoked', outline: 'Outline', plain: 'Plain text' };
+            const EVERY = { stay: 'Pops out once, stays', 10: 'Every 10 s', 30: 'Every 30 s', 60: 'Every minute', 300: 'Every 5 min', change: 'When the ETA changes' };
             const IMG = 7101;
             let imgShown = null, sampleImg = null, sampleKey = null;
             const sample = () => {           // the sample route in the current look (redrawn only when the look changes)
-                if (sampleKey !== strip.styleKey) { sampleKey = strip.styleKey; sampleImg = LOOK.render(LOOK.parts(LOOK.SAMPLE_ROUTE, '6:42 PM', strip.style), strip.style, strip.fonts); }
+                if (sampleKey !== strip.styleKey) { sampleKey = strip.styleKey; sampleImg = strip.sampleImage(); }
                 return sampleImg;
             };
             const T = { literal: true }, B = { font: strip.fonts.bold, literal: true }, M = { font: strip.fonts.med, literal: true };
@@ -157,7 +158,7 @@ mgu.run({
                 if (!strip.cr) return { c: C.orange, t: 'Install the Cluster renderer tool from the Store', d: s.client };
                 if (!strip.ready) return { c: C.orange, t: 'Connecting to the cluster', d: s.client };
                 if (!strip.cfg.on) return { c: C.dim2, t: 'Off', d: 'Turn it on with On / Off' };
-                if (strip.shown) return { c: C.green, t: Date.now() < strip.previewUntil && !stripRoute() ? 'Preview on the cluster' : 'On the cluster now', d: '' };
+                if (strip.showing()) return { c: C.green, t: Date.now() < strip.previewUntil && !stripRoute() ? 'Preview on the cluster' : 'On the cluster now', d: strip.style.preset === 'island' ? 'Island at the top' : 'Bottom strip' };
                 if (guiding()) return { c: C.orange, t: 'Apple Maps is guiding, waiting for its arrival time', d: 'Some iPhones send it a few seconds after the route starts' };
                 return { c: C.blue, t: 'Ready', d: 'Start a route in Apple Maps. The ETA appears on the cluster by itself.' };
             };
@@ -171,17 +172,23 @@ mgu.run({
                 const px = 40, py = 128, pw = W - 80, ph = 176;
                 cv.card(px, py, pw, ph, 22, [[0, '#0b0b0d'], [1, '#050506']]);
                 cv.strokeRoundRect(px, py, pw, ph, 22, 1.5, C.edge);
-                cv.text('8:54', px + 120, py + ph / 2 + 11, 30, C.dim2, M);
-                cv.text('COMFORT', px + pw - 120, py + ph / 2 + 11, 26, C.dim2, Object.assign({ align: 'right' }, M));
+                const top = strip.style.preset === 'island';
+                if (top) cv.roundRect(W / 2 - 70, py - 10, 140, 28, 14, '#1c1c1e');      // the camera, above the cluster's top edge
+                else {
+                    cv.text('8:54', px + 120, py + ph / 2 + 11, 30, C.dim2, M);
+                    cv.text('COMFORT', px + pw - 120, py + ph / 2 + 11, 26, C.dim2, Object.assign({ align: 'right' }, M));
+                }
                 const live = !!stripRoute() || now < strip.previewUntil;
                 const im = live && strip.image ? strip.image : sample();
                 if (im && im !== imgShown) { setImage(IMG, im.w, im.h, im.data); imgShown = im; }
-                if (im) cv.image(IMG, (W - im.w) / 2, py + (ph - im.h) / 2, im.w, im.h);
+                if (im) cv.image(IMG, (W - im.w) / 2, top ? py + 22 - (im.h - 76) / 2 : py + (ph - im.h) / 2, im.w, im.h);
                 cv.text(stripRoute() ? 'Live' : live ? 'Preview' : 'Sample', px + 22, py + 34, 18, C.dim, M);
                 // the trip
                 const r = trip(), ty = 324, tw = (W - 80 - 32) / 3;
                 const tiles = r ? [['Arrival', R.arrivalText(r, now) || '--'], ['Time left', R.leftText(r.travelSec) || '--'], ['Distance', r.dist ? r.dist + ' ' + (r.unit || '') : '--']]
-                    : [['Look', LOOK_NAME[strip.style.look] || strip.style.look], ['Layout', strip.style.layout === 'stacked' ? 'Stacked' : 'One row'], ['Size', Math.round(strip.cfg.scale * 100) + '%']];
+                    : strip.style.preset === 'island'
+                        ? [['Preset', 'Island (top)'], ['Pops out', EVERY[strip.style.every] || strip.style.every], ['Layout', strip.style.layout === 'stacked' ? 'Stacked' : 'One row']]
+                        : [['Preset', 'Bottom strip'], ['Look', LOOK_NAME[strip.style.look] || strip.style.look], ['Layout', strip.style.layout === 'stacked' ? 'Stacked' : 'One row']];
                 tiles.forEach((tl, i) => {
                     const x = 40 + i * (tw + 16);
                     cv.roundRect(x, ty, tw, 120, 20, C.card);
