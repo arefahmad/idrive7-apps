@@ -73,9 +73,11 @@ class Island {
     /** Make the layers (hidden). place: { x: the pill's centre, y: its top, scale }. iw, ih: the text image's size. */
     create(place, iw, ih, target, look) {
         this.place = place; this.iw = iw; this.ih = ih; this.look = look || 'black';
-        // on the map target (Waze on cluster's): joins its picture, takes the map from nobody (contend 0) and leaves
-        // the guidance box as Waze set it (guide_hold 0); the panel would cover BMW's own cluster widgets
-        const T = target || 'panel', extra = T === 'map' ? { guide_hold: 0, contend: 0 } : {};
+        // on the map target (Waze on cluster's): joins its picture and takes the map from nobody (contend 0). The
+        // guide hold stays as it is (the default, 1): 1.4.0-1.4.1 sent guide_hold 0, which made cluster-render release
+        // the stock maneuver slot for every layer, so BMW's top box (the M440i badge) showed over the map. The panel
+        // would cover BMW's own cluster widgets.
+        const T = target || 'panel', extra = T === 'map' ? { contend: 0 } : {};
         this.h = Math.round(PH * place.scale);
         const p = parts(this.h, this.look), cr = this.cr, g = this.geom();
         const mk = (cv, rect, z) => {
