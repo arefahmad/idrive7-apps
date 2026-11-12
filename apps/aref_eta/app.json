@@ -1,10 +1,11 @@
 {
   "id": "aref_eta",
   "title": "ETA Bar",
-  "description": "Apple Maps' arrival time, time left and distance left on the instrument cluster, in the bottom strip's blank space between the clock and the drive mode, during a CarPlay route. Needs the Cluster renderer tool from the Store. Move, Bigger and Smaller place it; Preview shows a sample for 30 s. Logs what the car's guidance services send to eta-probe.log.",
-  "version": "1.0.0",
+  "description": "Apple Maps' arrival time, time left and distance left on the instrument cluster, in the bottom strip's blank space between the clock and the drive mode, during a CarPlay route. Starts with the car. Needs the Cluster renderer tool from the Store. Move, Bigger and Smaller place it; Preview shows a sample for 30 s. Logs what the car's guidance services send to eta-probe.log.",
+  "version": "1.0.1",
   "vendor": "aref",
   "loggingId": "OAR7",
+  "mguAppStartType": "autostart",
   "startWidget": {
     "comment": "Home-screen widget (kit/runtime/homewidget.js): the big size is a 384 x 256 picture main.js draws, the small size two text lines.",
     "name": "ETA",
