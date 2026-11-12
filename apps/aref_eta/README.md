@@ -36,6 +36,15 @@ It needs the **Cluster renderer** tool from the Store (Waze on cluster installs 
 - **Move up / down / left / right, Bigger, Smaller:** place it. Each tap shows the preview. The place is saved.
 - **Reset place:** goes back to the default place, where BMW shows the street name.
 
+### Look (1.1)
+
+Apple Maps' style: `6:42 arrival   23 min   14.2 mi`. Values in Inter Bold (the open look-alike of Apple's SF Pro,
+the same atlases as Car Lyrics), units in Apple's secondary gray, and the minutes in Apple's traffic colours
+(green, orange, red) when the car reports traffic. Over an hour shows as `1:12 hr`. **Settings > Cluster look**
+picks plain text (default) or a dark rounded card like CarPlay's dashboard cards.
+Preview: [docs/screenshots/aref_eta/cluster-looks.png](../../docs/screenshots/aref_eta/cluster-looks.png)
+(the clock and drive mode there are stand-ins).
+
 Why it's drawn rather than sent to BMW's strip: BMW's strip shows an ETA only for BMW's own navigation. 0.2 to
 0.4 tried CarPlay's street field and the guidance state (provider CarPlay, none and other); none changed it.
 

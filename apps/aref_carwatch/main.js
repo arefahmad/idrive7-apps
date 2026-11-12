@@ -29,7 +29,7 @@ const SECTIONS = [
     { key: 'drives', title: 'Drives', prefix: 'DL_', set: 'dl_', start: require('./sec_drives'), old: 'aref_drivelog', files: ['drivelog.json', 'drives.csv'] },
 ];
 const SHARED_SETTINGS = ['theme', 'units'];
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 const BUTTONS = ['MF_VIEW', 'MF_MORE', 'MF_SAVE', 'FW_SCAN', 'FW_VIEW', 'FW_MORE', 'DL_VIEW', 'DL_DRAGY', 'DL_EXPORT', 'DL_MORE',
     'DL_UP', 'DL_DOWN', 'DL_UP2', 'DL_DOWN2', 'DL_SAVE', 'DL_SKIP'];
 

@@ -19,9 +19,9 @@ const path = require('path');
 const mgu = require('./kit/mgu');
 const R = require('./route');
 const HW = require('./kit/homewidget');
-const { Strip } = require('./strip');
+const { Strip, parts } = require('./strip');
 
-const VERSION = '1.0.1';
+const VERSION = '1.1.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -87,24 +87,23 @@ mgu.run({
             const trip = () => R.pick({ waypoints: val('carplay.waypoints'), finalDestinationInfo: val('bmw.finalDestinationInfo'),
                 nextDestinationInfo: val('bmw.nextDestinationInfo'), allDestinationsInfo: val('bmw.allDestinationsInfo') });
             const guiding = () => val('cpm.projectedGuidanceActive') === true;
-            // the guidance state as the car reports it right now, for the test and mark lines
-            const snapshot = () => ['bmw.guidanceState', 'bmw.guidingProvider', 'bmw.currentRoad', 'carplay.currentRoad', 'cpm.projectedGuidanceActive']
-                .map((k) => k + '=' + (vals[k] ? vals[k].s : '-')).join(' ');
 
             let page = 0;
             ui.onClick('BTN_MORE', guard('more', () => { page++; }));
-            ui.onClick('BTN_SAVE', guard('mark', () => { note2('MARK (button) ' + snapshot()); }));
             // the ETA on the cluster (strip.js)
             let note = null;
             const say = (text) => { note = { text: text, until: Date.now() + 6000 }; };
             const strip = new Strip(ctx, note2);
             strip.start();
-            const stripText = () => {
+            const stripParts = () => {
                 const r = trip();
                 if (!guiding() || !r || r.src !== 'carplay') return null;     // BMW's strip is blank only during a CarPlay route
-                return [R.arrivalText(r, Date.now()), R.leftText(r.travelSec), r.dist ? r.dist + ' ' + (r.unit || '') : null].filter(Boolean).join('  \u00b7  ') || null;
+                return parts(r, R.arrivalText(r, Date.now()));
             };
-            setInterval(guard('strip', () => strip.update(stripText())), 1000);
+            const look = () => strip.setLook(ctx.settings.get('look') || 'plain');
+            look();
+            ctx.settings.onChange(guard('look', look));
+            setInterval(guard('strip', () => strip.update(stripParts())), 1000);
             const placed = () => say('Placed: x ' + strip.cfg.x + ', y ' + strip.cfg.y + ', size ' + Math.round(strip.cfg.scale * 100) + '% - preview on the cluster for 30 s');
             ui.onClick('BTN_TOGGLE', guard('toggle', () => { strip.toggle(); say('ETA on the cluster: ' + (strip.cfg.on ? 'on' : 'off')); }));
             ui.onClick('BTN_PREVIEW', guard('preview', () => { strip.preview(); say('Preview on the cluster for 30 s'); }));

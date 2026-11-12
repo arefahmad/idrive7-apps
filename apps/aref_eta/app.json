@@ -1,8 +1,8 @@
 {
   "id": "aref_eta",
   "title": "ETA Bar",
-  "description": "Apple Maps' arrival time, time left and distance left on the instrument cluster, in the bottom strip's blank space between the clock and the drive mode, during a CarPlay route. Starts with the car. Needs the Cluster renderer tool from the Store. Move, Bigger and Smaller place it; Preview shows a sample for 30 s. Logs what the car's guidance services send to eta-probe.log.",
-  "version": "1.0.1",
+  "description": "Apple Maps' arrival time, time left and distance left on the instrument cluster, in the bottom strip's blank space between the clock and the drive mode, during a CarPlay route. Starts with the car. Needs the Cluster renderer tool from the Store. Move, Bigger and Smaller place it; Preview shows a sample for 30 s. Apple Maps style (Inter, like SF Pro): arrival, minutes in traffic colours, miles; Settings > Cluster look picks plain or a dark card. Logs what the car's guidance services send to eta-probe.log.",
+  "version": "1.1.0",
   "vendor": "aref",
   "loggingId": "OAR7",
   "mguAppStartType": "autostart",
@@ -129,10 +129,6 @@
           "More"
         ],
         [
-          "BTN_SAVE",
-          "Mark in log"
-        ],
-        [
           "BTN_SETTINGS",
           "Settings"
         ]
@@ -140,6 +136,22 @@
     }
   ],
   "settings": [
+    {
+      "key": "look",
+      "label": "Cluster look",
+      "type": "choice",
+      "default": "plain",
+      "options": [
+        [
+          "plain",
+          "Apple Maps (plain)"
+        ],
+        [
+          "card",
+          "Apple Maps (dark card)"
+        ]
+      ]
+    },
     {
       "key": "theme",
       "label": "Colours",

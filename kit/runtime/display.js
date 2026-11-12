@@ -211,12 +211,18 @@ class Display {
         this.gpu.grab(this.grabbing || (this.own() && gate && !process.env.MGU_NO_GRAB));
     }
 
+    /**
+     * The renderer can hold the iDrive controller (mgu-inputgate loaded in the HMI). Some starts it can't
+     * ("controller": false in its READY): the knob then only reaches the HMI's own buttons, so the kit
+     * mustn't run the screen (it would hide them): the HMI's title and bar stay, as in the standard layout.
+     */
+    ctl() { const g = this.gpu; return !!(g && (!g.native || !g.info || g.info.controller)); }
     /** The kit runs the screen: mgu-render/1 with touch, full-screen layout. */
     own() { return !!(this.gpu && this.gpu.ready && !this.blocked && this.gpu.native && this.gpu.touch && this.place && this.place.full); }
     /** own() but for the placement, which depends on it (the bar's height): the renderer and layout allow it. */
     ownable() {
         const g = this.gpu;
-        return !!(g && g.ready && g.native && g.touch && this.layout() === 'full' && g.screen.w === HMI.screen.w && g.screen.h === HMI.screen.h);
+        return !!(g && g.ready && g.native && g.touch && this.layout() === 'full' && g.screen.w === HMI.screen.w && g.screen.h === HMI.screen.h && this.ctl());
     }
     /**
      * Settings is the header's last tab where the kit runs the screen (the app has a Settings button), unless
@@ -532,7 +538,7 @@ class Display {
         if (!this.gpu || !this.gpu.ready) return;
         const scr = this.gpu.screen, v = this.layout();
         let pl;
-        if (v === 'standard' || scr.w !== HMI.screen.w || scr.h !== HMI.screen.h) {
+        if (v === 'standard' || !this.ctl() || scr.w !== HMI.screen.w || scr.h !== HMI.screen.h) {
             pl = { x: HMI.img.x, y: HMI.img.y, w: HMI.img.w, h: HMI.img.h, scale: 1, ox: 0, oy: 0, full: false };
         } else {
             // the surface covers the whole screen, so the HMI's own bar can't show under the back
@@ -570,7 +576,7 @@ class Display {
         this._hmiBar();
         this.recorders.clear();             // text sizes depend on the scale
         this.app = null; this.outRec = null;
-        this.log.info('display: renderer placement ' + JSON.stringify(pl) + ' (layout ' + v + ')');
+        this.log.info('display: renderer placement ' + JSON.stringify(pl) + ' (layout ' + v + (this.ctl() ? '' : ', no controller gate: the HMI keeps its bar') + ')');
         // (only a real change: hideButton places again for every button it hides)
         const key = JSON.stringify([pl, this.own(), this.screen ? this.buttons().map((b) => b.id) : []]);
         if (key !== this.layoutKey) { this.layoutKey = key; this._layoutChanged(); }
