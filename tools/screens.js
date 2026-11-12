@@ -378,7 +378,7 @@ async function eta() {
         await h.ready();
         await new Promise((r) => setTimeout(r, 1100));
         await h.shot('MAIN', 'app-' + look + '.png');
-        if (look === 'black') { h.clicks.BTN_MORE(); await h.shot('MAIN', 'diagnostics.png'); h.clicks.BTN_BACK(); await h.widget('widget.png'); }
+        if (look === 'black') { h.clicks.BTN_MORE(); await h.shot('MAIN', 'diagnostics.png'); h.clicks.BTN_MORE(); await h.widget('widget.png'); }
     }
     delete stubs['./kit/cluster_render'];
 }
