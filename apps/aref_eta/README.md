@@ -34,6 +34,8 @@ The car already holds Apple Maps' ETA in BMW's guidance data, so 0.4 tests wheth
 3. Tap **Test B: provider other**. Look at the strip, then tap **Mark in log**.
 4. Tap **Test: reset** to send back what the car had.
 
+Tests, marks and starts also go to `eta-tests.log`, which a route's data never pushes out (0.4.0 lost them: the time left changes every second and filled `eta-probe.log` in minutes). Values that change every second are now logged every 30 s.
+
 Tried and ruled out:
 
 - 0.2: writing the ETA into CarPlay's street field. The car takes it, but the strip doesn't show it.

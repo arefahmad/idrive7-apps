@@ -2,7 +2,7 @@
   "id": "aref_eta",
   "title": "ETA Bar",
   "description": "Puts Apple Maps' arrival time in the cluster's bottom strip, between the clock and the drive mode. Shows the arrival time, time and distance left that CarPlay reports, and logs what the car's guidance services send to eta-probe.log. Test A and Test B tell the car's guidance that a route is active with no CarPlay provider (none / other), to see whether the strip then shows the ETA; Test: reset sets back what the car had.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "vendor": "aref",
   "loggingId": "OAR7",
   "startWidget": {

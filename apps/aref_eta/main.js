@@ -18,9 +18,12 @@ const mgu = require('./kit/mgu');
 const R = require('./route');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
+const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
+const NOISY_MS = 30000;         // a value that changes every second during a route (time left) is logged at most this often
+const NOISY = /waypoints|DestinationInfo|travelled/;
 const WATCH = [
     { iface: 'de.bmw.infotainment.navigation.projectedmodeguiding.ProjectedModeGuiding', inst: 'Main_Instance', tag: 'carplay',
         fields: ['waypoints', 'currentRoad', 'activeRouteChange'] },
@@ -47,12 +50,24 @@ mgu.run({
                     fs.appendFileSync(FILE, new Date().toISOString() + ' ' + line + '\n');
                 } catch (e) { /* full disk: the screen still shows it */ }
             };
-            write('start ' + VERSION);
+            const TESTS = path.join(ctx.dataDir, 'eta-tests.log');
+            const note2 = (line) => {     // tests, marks and starts: also in their own file and the app log
+                write(line);
+                try { log.info(line); } catch (e) { /* no log */ }
+                try {
+                    try { if (fs.statSync(TESTS).size > TESTS_MAX) fs.renameSync(TESTS, TESTS + '.1'); } catch (e) { /* none yet */ }
+                    fs.appendFileSync(TESTS, new Date().toISOString() + ' ' + line + '\n');
+                } catch (e) { /* full disk */ }
+            };
+            note2('start ' + VERSION);
 
             const put = (key, v) => {
                 const s = json(v), old = vals[key];
                 if (old && old.s === s) return;
-                vals[key] = { v: v, s: s, at: Date.now(), n: (old ? old.n : 0) + 1 };
+                const now = Date.now();
+                vals[key] = { v: v, s: s, at: now, n: (old ? old.n : 0) + 1, logged: old ? old.logged : 0 };
+                if (NOISY.test(key) && old && now - old.logged < NOISY_MS) return;   // shown on screen, logged every 30 s
+                vals[key].logged = now;
                 write(key + ' = ' + (s.length > 4000 ? s.slice(0, 4000) + '...(' + s.length + ')' : s));
             };
             WATCH.forEach((w) => {
@@ -69,10 +84,13 @@ mgu.run({
             const trip = () => R.pick({ waypoints: val('carplay.waypoints'), finalDestinationInfo: val('bmw.finalDestinationInfo'),
                 nextDestinationInfo: val('bmw.nextDestinationInfo'), allDestinationsInfo: val('bmw.allDestinationsInfo') });
             const guiding = () => val('cpm.projectedGuidanceActive') === true;
+            // the guidance state as the car reports it right now, for the test and mark lines
+            const snapshot = () => ['bmw.guidanceState', 'bmw.guidingProvider', 'bmw.currentRoad', 'carplay.currentRoad', 'cpm.projectedGuidanceActive']
+                .map((k) => k + '=' + (vals[k] ? vals[k].s : '-')).join(' ');
 
             let page = 0;
             ui.onClick('BTN_MORE', guard('more', () => { page++; }));
-            ui.onClick('BTN_SAVE', guard('mark', () => { write('MARK (button)'); }));
+            ui.onClick('BTN_SAVE', guard('mark', () => { note2('MARK (button) ' + snapshot()); }));
             /*
              * The test (0.4). 0.3 showed: ProjectedModeGuiding.setGuidanceState(ACTIVE, CAR_PLAY) with no route hides the
              * street, the same as a real Apple Maps route; during a route it changes nothing (Apple Maps already set that).
@@ -84,11 +102,11 @@ mgu.run({
             let note = null;
             const say = (text) => { note = { text: text, until: Date.now() + 9000 }; };
             const setState = (state, provider, label) => {
-                if (!proxies.carplay) { say('Not connected to CarPlay guidance yet'); write('TEST no proxy'); return; }
-                write('TEST ' + label + ': setGuidanceState ' + state + ', ' + provider + ' (CarPlay guiding: ' + guiding() + ')');
+                if (!proxies.carplay) { say('Not connected to CarPlay guidance yet'); note2('TEST no proxy'); return; }
+                note2('TEST ' + label + ': setGuidanceState ' + state + ', ' + provider + ' (CarPlay guiding: ' + guiding() + ')');
                 ctx.signals.call(proxies.carplay, 'setGuidanceState', { guidanceState: state, guidingProvider: provider }).then(
-                    (r) => { write('TEST ' + label + ' accepted ' + json(r)); say(label + ': sent ' + state + ', ' + provider + ' - look at the strip, then tap Mark in log'); },
-                    (e) => { write('TEST ' + label + ' failed: ' + (e && e.message || e)); say('The car refused it: ' + (e && e.message || e)); });
+                    (r) => { note2('TEST ' + label + ' accepted ' + json(r)); setTimeout(guard('after', () => note2('TEST ' + label + ' 3 s later: ' + snapshot())), 3000); say(label + ': sent ' + state + ', ' + provider + ' - look at the strip, then tap Mark in log'); },
+                    (e) => { note2('TEST ' + label + ' failed: ' + (e && e.message || e)); say('The car refused it: ' + (e && e.message || e)); });
             };
             ui.onClick('BTN_TEST', guard('test a', () => setState('ACTIVE', 'NONE', 'Test A')));
             ui.onClick('BTN_TEST2', guard('test b', () => setState('ACTIVE', 'OTHER', 'Test B')));
