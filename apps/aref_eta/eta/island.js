@@ -35,7 +35,7 @@ const r = (v) => Math.round(v * 1000) / 1000;
 function pixels(cv) { return Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length); }
 /** The pill's parts at height h: left cap, middle slice, right cap (black, with the cluster's hairline rim). */
 function parts(h) {
-    const rad = h / 2, rim = [255, 255, 255, 30];
+    const rad = h / 2, rim = [255, 255, 255, 48];
     const L = new Canvas(Math.ceil(rad), h), R = new Canvas(Math.ceil(rad), h), M = new Canvas(4, h);
     [L, R, M].forEach((c) => c.clear([0, 0, 0, 0]));
     L.roundRect(0, 0, h, h, rad, [0, 0, 0, 255]); L.strokeRoundRect(0.5, 0.5, h - 1, h - 1, rad, 1, rim);
@@ -52,6 +52,9 @@ class Island {
         this.open = false; this.place = { x: 960, y: 12, scale: 1 }; this.cw = 400; this.h = PH;
         this.img = null;
     }
+
+    /** Its layers' refs -> names, for the log. */
+    names() { const o = {}; if (this.refs) Object.keys(this.refs).forEach((k) => { o[this.refs[k]] = 'island ' + k; }); return o; }
 
     /** Make the layers (hidden). place: { x: the pill's centre, y: its top, scale }. iw, ih: the text image's size. */
     create(place, iw, ih) {
@@ -75,7 +78,7 @@ class Island {
         const w = Math.max(h * 2, Math.round((this.cw + 2 * PAD) * s)), x0 = Math.round(this.place.x - w / 2), y = Math.round(this.place.y);
         const tw = Math.round(this.iw * s), th = Math.round(this.ih * s);
         return { w: w, L: { x: x0, y: y, w: rad, h: h }, R: { x: x0 + w - rad, y: y, w: rad, h: h }, M: { x: x0 + rad, y: y, w: w - 2 * rad, h: h },
-            T: { x: Math.round(this.place.x - tw / 2), y: Math.round(y + h / 2 - th / 2), w: tw, h: th } };
+            T: { x: Math.round(this.place.x - tw / 2), y: Math.max(0, Math.round(y + h / 2 - th / 2)), w: tw, h: th } };
     }
 
     /** The text: img = look.js render() of the parts with look 'bare' ({ data, cw }). Resizes an open pill. */
@@ -186,7 +189,7 @@ function preview(img, iw, ih) {
     cv.clear([0, 0, 0, 0]);
     const x = (cv.w - w) / 2, y = (cv.h - h) / 2;
     cv.roundRect(x, y, w, h, h / 2, [0, 0, 0, 255]);
-    cv.strokeRoundRect(x + 0.5, y + 0.5, w - 1, h - 1, h / 2, 1, [255, 255, 255, 30]);
+    cv.strokeRoundRect(x + 0.5, y + 0.5, w - 1, h - 1, h / 2, 1, [255, 255, 255, 48]);
     const src = { w: iw, h: ih, d: img.data };
     // the text image centred (straight alpha over the pill)
     const ox = Math.round((cv.w - iw) / 2), oy = Math.round((cv.h - ih) / 2);

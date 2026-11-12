@@ -9,7 +9,9 @@
  * style: { look, layout, traffic, ampm, arrival, minutes, distance }
  *   look    plain    text straight on the strip, with a soft shadow
  *           black    the cluster's own black, rounded, with a hairline rim (as its dividers) and a drop shadow
- *           smoked   the same black, see-through: the cluster's picture shows through it
+ *           smoked   the same black at 45%: whatever the cluster draws there shows through (no blur: the layer
+ *                    can't read what's under it, so it can only tint)
+ *           glass    Apple's dark material over black: a faint lift, a hairline highlight on top, no shine
  *           outline  no fill, a thin rim only
  *           bare     text only, no shadow (the island draws its own black pill: island.js)
  *   layout  row      6:42 arrival   23 min   14.2 mi
@@ -20,9 +22,9 @@
 const { Canvas } = require('./kit/canvas');
 
 const IW = 800, IH = 112;
-const LOOKS = ['plain', 'black', 'smoked', 'outline'];
+const LOOKS = ['plain', 'black', 'smoked', 'glass', 'outline'];
 // looks an older version saved, and what they are now
-const OLD_LOOK = { card: 'black', glass: 'smoked', light: 'outline' };
+const OLD_LOOK = { card: 'black', light: 'outline' };
 const lookOf = (l) => OLD_LOOK[l] || (LOOKS.indexOf(l) >= 0 || l === 'bare' ? l : 'black');
 const LAYOUTS = ['row', 'stacked'];
 const DEFAULT_STYLE = { look: 'black', layout: 'row', traffic: true, ampm: false, arrival: true, minutes: true, distance: true };
@@ -115,8 +117,13 @@ function render(ps, style, fontNames) {
         cv.roundRect(px, py, pw, ph, rad, [0, 0, 0, 255]);
         cv.strokeRoundRect(px + 0.5, py + 0.5, pw - 1, ph - 1, rad, 1, [255, 255, 255, 30]);
     } else if (s.look === 'smoked') {
-        cv.roundRect(px, py, pw, ph, rad, [0, 0, 0, 170]);
-        cv.strokeRoundRect(px + 0.5, py + 0.5, pw - 1, ph - 1, rad, 1, [255, 255, 255, 22]);
+        cv.roundRect(px, py, pw, ph, rad, [0, 0, 0, 115]);
+        cv.strokeRoundRect(px + 0.5, py + 0.5, pw - 1, ph - 1, rad, 1, [255, 255, 255, 26]);
+    } else if (s.look === 'glass') {
+        // what Apple's dark glass looks like over black: lifted a few percent, a hairline catching light on top
+        cv.roundRect(px, py, pw, ph, rad, [255, 255, 255, 16]);
+        cv.strokeRoundRect(px + 0.5, py + 0.5, pw - 1, ph - 1, rad, 1, [255, 255, 255, 34]);
+        cv.card(px + rad * 0.6, py + 1, pw - rad * 1.2, 1.2, 0.6, [[0, [255, 255, 255, 60]], [1, [255, 255, 255, 60]]]);
     } else if (s.look === 'outline') {
         cv.strokeRoundRect(px + 0.75, py + 0.75, pw - 1.5, ph - 1.5, rad, 1.5, [255, 255, 255, 64]);
     }
@@ -152,4 +159,18 @@ function render(ps, style, fontNames) {
     return { w: IW, h: IH, data: Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length), cw: Math.round(cw), ch: ch };
 }
 
-module.exports = { IW, IH, LOOKS, LAYOUTS, DEFAULT_STYLE, SAMPLE_ROUTE, parts, render, lookOf, shadow };
+/** BMW's street name, drawn as the strip draws it, for the island preset (BMW blanks its own during a CarPlay route). */
+function street(text, fontNames) {
+    const fn = fontNames || { bold: 'bold', med: 'label' };
+    const cv = new Canvas(IW, IH);
+    cv.clear([0, 0, 0, 0]);
+    if (text) {
+        const O = { font: fn.med, literal: true, align: 'center' };
+        let s = String(text), size = 31;
+        while (s.length > 1 && cv.textWidth(s, size, O) > IW - 40) s = s.slice(0, -1);
+        cv.text(s, IW / 2, IH / 2 + 11, size, [232, 232, 236, 255], O);
+    }
+    return { w: IW, h: IH, data: Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length) };
+}
+
+module.exports = { street, IW, IH, LOOKS, LAYOUTS, DEFAULT_STYLE, SAMPLE_ROUTE, parts, render, lookOf, shadow };

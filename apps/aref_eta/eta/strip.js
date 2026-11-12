@@ -30,7 +30,7 @@ const IW = LOOK.IW, IH = LOOK.IH;         // the image; the rect on the cluster 
 const PREVIEW_MS = 30000;
 const MAP_WAIT_MS = 3000;            // longest the ETA waits for the cluster's map to come up
 const DEF = { on: true, x: 968, y: 668, scale: 1 };   // x, y: the picture's centre on the cluster (px), where BMW's street name sits (measured on a G-series cluster photo); scale of IW x IH
-const DEF_ISLAND = { x: 960, y: 12, scale: 1 };   // the island: its centre x and top y (under the driver attention camera, top middle)
+const DEF_ISLAND = { x: 960, y: 24, scale: 1 };   // the island: its centre x and top y (under the driver attention camera, top middle)
 const LIMIT = { x: [200, 1720], y: [0, 700], scale: [0.5, 2] };
 // the island's schedule (Settings "island_every"): how long it stays open each time it pops out
 const HOLD_MS = 6000;
@@ -81,10 +81,12 @@ class Strip {
                 if (this.ref && this.pixels) { try { cr.pixels(this.ref, null, this.pixels); } catch (e) { /* next draw */ } }
             });
             cr.on('disconnected', () => { this.ready = false; this.state.client = 'reconnecting'; });
+            this.layerStates = {};
             cr.on('layer', (ref, state, reason) => {
-                if (ref !== this.ref) return;
-                if (state !== this.state.layer) this.note('cluster: layer ' + state + (reason ? ' (' + reason + ')' : ''));
-                this.state.layer = state; this.state.reason = reason || '';
+                const name = ref === this.ref ? 'strip' : (this.island && this.island.names()[ref]) || 'layer ' + ref;
+                if (this.layerStates[name] !== state) this.note('cluster: ' + name + ' ' + state + (reason ? ' (' + reason + ')' : ''));
+                this.layerStates[name] = state;
+                if (ref === this.ref) { this.state.layer = state; this.state.reason = reason || ''; }
             });
             cr.on('target', (name, state, holder, reason) => {
                 if (name === 'map') {        // Waze on cluster's map (CarPlay's map on the cluster): the ETA comes and goes with it
@@ -122,9 +124,10 @@ class Strip {
     }
 
     /** Called on every route update and each second: route (route.js pick(), null: nothing to show), arrival text. */
-    update(route, arrival) {
-        if (this.style.preset === 'island') return this.updateIsland(route, arrival);
+    update(route, arrival, road) {
+        if (this.style.preset === 'island') return this.updateIsland(route, arrival, road);
         if (this.isl.active || (this.island && this.island.open)) { this.isl.active = false; if (this.island) this.island.hide(); this.text = null; }
+        if (this.streetText) { this.streetText = null; this.text = null; }
         const preview = Date.now() < this.previewUntil;
         const p = route ? LOOK.parts(route, arrival, this.style) : preview ? LOOK.parts(LOOK.SAMPLE_ROUTE, '6:42 PM', this.style) : null;
         const want = !!(this.cfg.on && p && (route || preview));
@@ -157,13 +160,24 @@ class Strip {
     }
 
     /** The island preset: pops out of the camera on the schedule, shrinks back in between (island.js). */
-    updateIsland(route, arrival) {
+    updateIsland(route, arrival, road) {
         const now = Date.now(), preview = now < this.previewUntil;
         const p = route ? LOOK.parts(route, arrival, this.style) : preview ? LOOK.parts(LOOK.SAMPLE_ROUTE, '6:42 PM', this.style) : null;
         const want = !!(this.cfg.on && p && (route || preview));
         try {
-            if (this.shown && this.cr && this.ref) { this.shown = false; this.cr.set(this.ref, { visible: false }); }   // the bottom one
+            // the bottom strip: the street name BMW blanks during a CarPlay route (Settings: Street name)
+            const st = this.style.street !== false && route && road ? road : null;
+            if (st !== this.streetText && this.cr && this.ref) {
+                this.streetText = st;
+                if (st) { this.pixels = LOOK.street(st, this.fonts).data; this.cr.pixels(this.ref, null, this.pixels); this.text = null; }
+            }
+            const wantStreet = !!(this.cfg.on && st);
+            if (wantStreet !== this.shown && this.cr && this.ref) {
+                this.shown = wantStreet; this.cr.set(this.ref, { visible: wantStreet });
+                this.note('cluster: street name ' + (wantStreet ? '"' + st + '"' : 'off'));
+            }
             const key = p ? 'i' + JSON.stringify(p) + this.styleKey : null;
+            if (key === this.text && this.pixels && this.streetText) this.text = null;   // (the street name took the bottom layer)
             if (key && key !== this.text) {
                 this.text = key;
                 const img = LOOK.render(p, Object.assign({}, this.style, { look: 'bare' }), this.fonts);
@@ -219,7 +233,10 @@ class Strip {
         this.place(); this.preview();
     }
     toggle() { this.cfg.on = !this.cfg.on; this.save(); this.note('cluster ETA ' + (this.cfg.on ? 'on' : 'off')); }
-    preview() { this.previewUntil = Date.now() + PREVIEW_MS; if (this.style.preset === 'island' && this.island && this.island.open) { this.island.close(); this.isl.active = false; } }
+    preview() {
+        this.previewUntil = Date.now() + PREVIEW_MS;
+        if (this.style.preset === 'island' && this.island && !this.island.open) { this.island.pop(); this.isl.active = true; this.isl.lastPop = Date.now(); }
+    }
 
     status() {
         const s = this.state;

@@ -23,7 +23,7 @@ const { Strip } = require('./strip');
 const LOOK = require('./look');
 const { setImage } = require('./kit/record');
 
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -103,8 +103,9 @@ mgu.run({
 
             let page = 0;
             let diag = false;
-            ui.onClick('BTN_MORE', guard('diagnostics', () => { if (!diag) { diag = true; page = 0; } else page++; }));
-            ui.onClick('BTN_BACK', guard('back', () => { diag = false; }));
+            // Diagnostics opens the raw values and closes them again (its pages turn by themselves)
+            ui.onClick('BTN_MORE', guard('diagnostics', () => { diag = !diag; page = 0; try { ui.text('BTN_MORE', diag ? 'Close diagnostics' : 'Diagnostics'); } catch (e) { /* */ } }));
+            setInterval(() => { if (diag) page++; }, 6000);
             // the ETA on the cluster (strip.js)
             let note = null;
             const say = (text) => { note = { text: text, until: Date.now() + 6000 }; };
@@ -117,12 +118,14 @@ mgu.run({
             const style = () => {
                 const g = (k, d) => { const v = ctx.settings.get(k); return v === undefined || v === null ? d : v; };
                 const D = LOOK.DEFAULT_STYLE;
-                return { preset: g('preset', 'bottom'), every: String(g('island_every', 'stay')), look: LOOK.lookOf(g('look', D.look)), layout: g('layout', D.layout), traffic: !!g('traffic', D.traffic), ampm: !!g('ampm', D.ampm),
+                return { street: !!g('street', true), preset: g('preset', 'bottom'), every: String(g('island_every', 'stay')), look: LOOK.lookOf(g('look', D.look)), layout: g('layout', D.layout), traffic: !!g('traffic', D.traffic), ampm: !!g('ampm', D.ampm),
                     arrival: !!g('show_arrival', D.arrival), minutes: !!g('show_minutes', D.minutes), distance: !!g('show_distance', D.distance) };
             };
             strip.setStyle(style());
             ctx.settings.onChange(guard('style', () => strip.setStyle(style())));
-            onRoute = guard('strip', () => { const r = stripRoute(); strip.update(r, r ? R.arrivalText(r, Date.now()) : null); });
+            // the street Apple Maps says you're on (CarPlay's currentRoad), for the island preset's bottom strip
+            const road = () => { const v = val('carplay.currentRoad'), e = v && v.elements; return Array.isArray(e) && e.length ? e.map((x) => x && x.text).filter(Boolean).join(' ') || null : null; };
+            onRoute = guard('strip', () => { const r = stripRoute(); strip.update(r, r ? R.arrivalText(r, Date.now()) : null, road()); });
             setInterval(onRoute, 1000);
             const placed = () => say('Moved. Showing a preview on the cluster for 30 seconds.');
             ui.onClick('BTN_TOGGLE', guard('toggle', () => { strip.toggle(); say(strip.cfg.on ? 'The ETA will show on the cluster during Apple Maps routes.' : 'The ETA is off. BMW\'s strip stays as it is.'); }));
@@ -144,7 +147,7 @@ mgu.run({
             // the screen: Apple's dark look on pure black, so it meets the HMI's own black with no seam
             const C = { bg: '#000000', card: '#1c1c1e', card2: '#2c2c2e', edge: '#38383a', text: '#ffffff', dim: '#98989f', dim2: '#636366',
                 green: '#30d158', orange: '#ff9f0a', red: '#ff453a', blue: '#0a84ff' };
-            const LOOK_NAME = { black: 'Black', smoked: 'Smoked', outline: 'Outline', plain: 'Plain text' };
+            const LOOK_NAME = { black: 'Black', smoked: 'Smoked', glass: 'Glass', outline: 'Outline', plain: 'Plain text' };
             const EVERY = { stay: 'Pops out once, stays', 10: 'Every 10 s', 30: 'Every 30 s', 60: 'Every minute', 300: 'Every 5 min', change: 'When the ETA changes' };
             const IMG = 7101;
             let imgShown = null, sampleImg = null, sampleKey = null;
@@ -215,7 +218,7 @@ mgu.run({
                 const PER = 11, pages = Math.max(1, Math.ceil(rows.length / PER)), pg = page % pages;
                 cv.roundRect(40, 146, W - 80, 330, 18, C.card);
                 rows.slice(pg * PER, pg * PER + PER).forEach((s, i) => cv.text(fit(cv, s, 17, W - 130, T), 64, 178 + i * 28, 17, i % 2 ? C.dim : C.text, T));
-                cv.text('Page ' + (pg + 1) + ' of ' + pages + '   ·   Diagnostics again: next page   ·   Done: back', W - 40, 500, 16, C.dim2, { align: 'right', literal: true });
+                cv.text('Page ' + (pg + 1) + ' of ' + pages + (pages > 1 ? ' (turns every 6 s)' : ''), W - 40, 500, 16, C.dim2, { align: 'right', literal: true });
             };
             ctx.loop('MAIN', 2, guard('draw', async () => {
                 const cv = ctx.canvas(W, H).clear(C.bg), now = Date.now();
