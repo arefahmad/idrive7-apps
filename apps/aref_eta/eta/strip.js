@@ -30,12 +30,16 @@ const IW = LOOK.IW, IH = LOOK.IH;         // the image; the rect on the cluster 
 const PREVIEW_MS = 30000;
 const MAP_WAIT_MS = 3000;            // longest the ETA waits for the cluster's map to come up
 const DEF = { on: true, x: 968, y: 668, scale: 1 };   // x, y: the picture's centre on the cluster (px), where BMW's street name sits (measured on a G-series cluster photo); scale of IW x IH
-const DEF_ISLAND = { x: 960, y: 24, scale: 1 };   // the island: its centre x and top y (under the driver attention camera, top middle)
+// the island, on Waze on cluster's map target (1088 x 480, under the bezel's camera notch on a G22): its centre x and
+// top y there. On the panel it covered BMW's own cluster widgets (music, trip computer: one cluster slot), and the
+// panel's top ~110 px sit under the notch (Aref's photos, Nov 12: visible from panel y 144 = map y ~24)
+const DEF_ISLAND = { x: 544, y: 24, scale: 1 };
+const LIMIT_ISLAND = { x: [120, 968], y: [0, 380], scale: [0.5, 2] };
 const LIMIT = { x: [200, 1720], y: [0, 700], scale: [0.5, 2] };
 // the island's schedule (Settings "island_every"): how long it stays open each time it pops out
 const HOLD_MS = 6000;
 const STEP = { x: 20, y: 6, scale: 0.1 };
-const STEP_ISLAND = { x: 40, y: 30 };      // the island moves in bigger steps (it can sit anywhere on the cluster)
+const STEP_ISLAND = { x: 30, y: 10 };      // on the map's picture
 
 function clamp(v, r) { return Math.max(r[0], Math.min(r[1], v)); }
 
@@ -49,7 +53,8 @@ class Strip {
         this.cr = null; this.ref = null; this.ready = false;
         this.text = null; this.shown = false; this.previewUntil = 0;
         this.map = { state: null, at: 0 }; this.pending = null;
-        this.cfg.island = Object.assign({}, DEF_ISLAND, this.cfg.island);
+        this.cfg.islandMap = Object.assign({}, DEF_ISLAND, this.cfg.islandMap);
+        delete this.cfg.island;               // 1.3.0-1.3.2: panel coordinates
         this.island = null; this.isl = { active: false, lastPop: 0, arrival: null, img: null };
         this.style = Object.assign({}, LOOK.DEFAULT_STYLE); this.styleKey = undefined; this.image = null;
         this.state = { client: 'starting', layer: '', target: '', reason: '' };
@@ -107,7 +112,7 @@ class Strip {
             this.ref = cr.image({ target: 'panel', klass: 'content', z: 20, x: r.x, y: r.y, w: r.w, h: r.h, iw: IW, ih: IH,
                 sampling: 'bilinear', fps: 2, visible: false });
             this.island = new ISL.Island(cr, this.note);
-            this.island.create(this.cfg.island, IW, IH);
+            this.island.create(this.cfg.islandMap, IW, IH, 'map');
             cr.connect();
         } catch (e) {
             this.state.client = 'failed: ' + e.message;
@@ -165,7 +170,11 @@ class Strip {
     updateIsland(route, arrival, road) {
         const now = Date.now(), preview = now < this.previewUntil;
         const p = route ? LOOK.parts(route, arrival, this.style) : preview ? LOOK.parts(LOOK.SAMPLE_ROUTE, '6:42 PM', this.style) : null;
-        const want = !!(this.cfg.on && p && (route || preview));
+        // the island lives on the cluster map's picture: it shows while Waze on cluster has the map up
+        const mapUp = this.map.state === 'shown';
+        if (this.cfg.on && p && (route || preview) && !mapUp && !this.mapNoted) { this.mapNoted = true; this.note('island: waiting for the cluster map (Waze on cluster), map ' + (this.map.state || 'unknown')); }
+        if (mapUp) this.mapNoted = false;
+        const want = !!(this.cfg.on && p && (route || preview) && mapUp);
         try {
             // the bottom strip: the street name BMW blanks during a CarPlay route (Settings: Street name)
             const st = this.style.street !== false && route && road ? road : null;
@@ -189,7 +198,7 @@ class Strip {
             const isl = this.isl, I = this.island;
             if (!I) return;
             if (!want) {
-                if (isl.active) { isl.active = false; I.close(); this.note('island: close (route ended)'); }
+                if (isl.active) { isl.active = false; I.close(); this.note('island: close'); }
                 return;
             }
             const every = this.style.every || 'stay';
@@ -217,26 +226,26 @@ class Strip {
     showing() { return !!(this.shown || (this.island && this.island.open) || this.isl.active); }
 
     /** Where the current preset sits: the bottom strip's place (cfg) or the island's (cfg.island). */
-    spot() { return this.style.preset === 'island' ? this.cfg.island : this.cfg; }
+    spot() { return this.style.preset === 'island' ? this.cfg.islandMap : this.cfg; }
 
     place() {
         try {
             const r = this.rect();
             if (this.cr && this.ref) this.cr.set(this.ref, { x: r.x, y: r.y, w: r.w, h: r.h });
-            if (this.island) this.island.move(this.cfg.island);
+            if (this.island) this.island.move(this.cfg.islandMap);
         } catch (e) { /* next */ }
         this.save();
     }
     move(dx, dy) {
-        const o = this.spot(), st = this.style.preset === 'island' ? STEP_ISLAND : STEP;
-        o.x = clamp(o.x + dx * st.x, LIMIT.x); o.y = clamp(o.y + dy * st.y, LIMIT.y);
+        const isl = this.style.preset === 'island', o = this.spot(), st = isl ? STEP_ISLAND : STEP, lim = isl ? LIMIT_ISLAND : LIMIT;
+        o.x = clamp(o.x + dx * st.x, lim.x); o.y = clamp(o.y + dy * st.y, lim.y);
         this.note('placed ' + (this.style.preset === 'island' ? 'island' : 'strip') + ' at x ' + o.x + ', y ' + o.y + ', ' + Math.round(o.scale * 100) + '%');
         this.place(); this.preview();
     }
     size(d) { const o = this.spot(); o.scale = clamp(Math.round((o.scale + d * STEP.scale) * 10) / 10, LIMIT.scale); this.place(); this.preview(); }
     reset() {
-        if (this.style.preset === 'island') this.cfg.island = Object.assign({}, DEF_ISLAND);
-        else this.cfg = Object.assign({}, DEF, { on: this.cfg.on, island: this.cfg.island });
+        if (this.style.preset === 'island') this.cfg.islandMap = Object.assign({}, DEF_ISLAND);
+        else this.cfg = Object.assign({}, DEF, { on: this.cfg.on, islandMap: this.cfg.islandMap });
         this.place(); this.preview();
     }
     toggle() { this.cfg.on = !this.cfg.on; this.save(); this.note('cluster ETA ' + (this.cfg.on ? 'on' : 'off')); }

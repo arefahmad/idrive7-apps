@@ -23,7 +23,7 @@ const { Strip } = require('./strip');
 const LOOK = require('./look');
 const { setImage } = require('./kit/record');
 
-const VERSION = '1.3.2';
+const VERSION = '1.4.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -118,7 +118,7 @@ mgu.run({
             const style = () => {
                 const g = (k, d) => { const v = ctx.settings.get(k); return v === undefined || v === null ? d : v; };
                 const D = LOOK.DEFAULT_STYLE;
-                return { street: !!g('street', true), preset: g('preset', 'bottom'), every: String(g('island_every', 'stay')), look: LOOK.lookOf(g('look', D.look)), layout: g('layout', D.layout), traffic: !!g('traffic', D.traffic), ampm: !!g('ampm', D.ampm),
+                return { street: !!g('street', false), preset: g('preset', 'bottom'), every: String(g('island_every', 'stay')), look: LOOK.lookOf(g('look', D.look)), layout: g('layout', D.layout), traffic: !!g('traffic', D.traffic), ampm: !!g('ampm', D.ampm),
                     arrival: !!g('show_arrival', D.arrival), minutes: !!g('show_minutes', D.minutes), distance: !!g('show_distance', D.distance) };
             };
             strip.setStyle(style());
@@ -174,6 +174,7 @@ mgu.run({
                 if (!strip.ready) return { c: C.orange, t: 'Connecting to the cluster', d: s.client };
                 if (!strip.cfg.on) return { c: C.dim2, t: 'Off', d: 'Turn it on with On / Off' };
                 if (strip.showing()) return { c: C.green, t: Date.now() < strip.previewUntil && !stripRoute() ? 'Preview on the cluster' : 'On the cluster now', d: strip.style.preset === 'island' ? 'Island at the top' : 'Bottom strip' };
+                if (strip.style.preset === 'island' && strip.map.state !== 'shown') return { c: C.orange, t: 'The island waits for the cluster map', d: 'It sits on Waze on cluster\'s map: turn that on (or switch to Bottom strip)' };
                 if (guiding()) return { c: C.orange, t: 'Apple Maps is guiding, waiting for its arrival time', d: 'Some iPhones send it a few seconds after the route starts' };
                 return { c: C.blue, t: 'Ready', d: 'Start a route in Apple Maps. The ETA appears on the cluster by itself.' };
             };

@@ -57,19 +57,22 @@ class Island {
     names() { const o = {}; if (this.refs) Object.keys(this.refs).forEach((k) => { o[this.refs[k]] = 'island ' + k; }); return o; }
 
     /** Make the layers (hidden). place: { x: the pill's centre, y: its top, scale }. iw, ih: the text image's size. */
-    create(place, iw, ih) {
+    create(place, iw, ih, target) {
         this.place = place; this.iw = iw; this.ih = ih;
+        // on the map target (Waze on cluster's): joins its picture, takes the map from nobody (contend 0) and leaves
+        // the guidance box as Waze set it (guide_hold 0); the panel would cover BMW's own cluster widgets
+        const T = target || 'panel', extra = T === 'map' ? { guide_hold: 0, contend: 0 } : {};
         this.h = Math.round(PH * place.scale);
         const p = parts(this.h), cr = this.cr, g = this.geom();
         const mk = (cv, rect, z) => {
-            const ref = cr.image({ target: 'panel', klass: 'overlay', z: z, x: rect.x, y: rect.y, w: rect.w, h: rect.h, iw: cv.w, ih: cv.h,
-                sampling: 'bilinear', fps: 2, visible: false });
+            const ref = cr.image(Object.assign({ target: T, klass: 'overlay', z: z, x: rect.x, y: rect.y, w: rect.w, h: rect.h, iw: cv.w, ih: cv.h,
+                sampling: 'bilinear', fps: 2, visible: false }, extra));
             cr.pixels(ref, null, pixels(cv));
             return ref;
         };
         this.parts = p;
         this.refs = { L: mk(p.L, g.L, 30), M: mk(p.M, g.M, 30), R: mk(p.R, g.R, 30),
-            T: cr.image({ target: 'panel', klass: 'overlay', z: 31, x: g.T.x, y: g.T.y, w: g.T.w, h: g.T.h, iw: iw, ih: ih, sampling: 'bilinear', fps: 2, visible: false }) };
+            T: cr.image(Object.assign({ target: T, klass: 'overlay', z: 31, x: g.T.x, y: g.T.y, w: g.T.w, h: g.T.h, iw: iw, ih: ih, sampling: 'bilinear', fps: 2, visible: false }, extra)) };
     }
 
     /** The open pill's rects. */
