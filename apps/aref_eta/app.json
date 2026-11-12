@@ -1,8 +1,8 @@
 {
   "id": "aref_eta",
   "title": "ETA Bar",
-  "description": "Puts Apple Maps' arrival time in the cluster's bottom strip, between the clock and the drive mode. Shows the arrival time, time and distance left that CarPlay reports, and logs what the car's guidance services send to eta-probe.log. Test A and Test B tell the car's guidance that a route is active with no CarPlay provider (none / other), to see whether the strip then shows the ETA; Test: reset sets back what the car had.",
-  "version": "0.4.1",
+  "description": "Apple Maps' arrival time, time left and distance left on the instrument cluster, in the bottom strip's blank space between the clock and the drive mode, during a CarPlay route. Needs the Cluster renderer tool from the Store. Move, Bigger and Smaller place it; Preview shows a sample for 30 s. Logs what the car's guidance services send to eta-probe.log.",
+  "version": "1.0.0",
   "vendor": "aref",
   "loggingId": "OAR7",
   "startWidget": {
@@ -62,10 +62,7 @@
       "_instances": "Main_Instance",
       "waypoints": "rs",
       "currentRoad": "rs",
-      "activeRouteChange": "rs",
-      "_methods": [
-        "setGuidanceState"
-      ]
+      "activeRouteChange": "rs"
     },
     "de.bmw.infotainment.navigation.guiding.Guidance": {
       "_instances": "Main_Instance",
@@ -91,16 +88,40 @@
       "title": "ETA Bar",
       "buttons": [
         [
-          "BTN_TEST",
-          "Test A: provider none"
+          "BTN_TOGGLE",
+          "Cluster ETA on/off"
         ],
         [
-          "BTN_TEST2",
-          "Test B: provider other"
+          "BTN_PREVIEW",
+          "Preview on cluster"
         ],
         [
-          "BTN_OFF",
-          "Test: reset"
+          "BTN_UP",
+          "Move up"
+        ],
+        [
+          "BTN_DOWN",
+          "Move down"
+        ],
+        [
+          "BTN_LEFT",
+          "Move left"
+        ],
+        [
+          "BTN_RIGHT",
+          "Move right"
+        ],
+        [
+          "BTN_BIGGER",
+          "Bigger"
+        ],
+        [
+          "BTN_SMALLER",
+          "Smaller"
+        ],
+        [
+          "BTN_RESET",
+          "Reset place"
         ],
         [
           "BTN_MORE",

@@ -23,25 +23,23 @@ in the app's data folder:
 - **Mark in log:** writes a marker line (tap it when you start or end a route, to find it in the log).
 - **Home-screen widget:** the arrival time and what's left.
 
-## The test buttons
+## The ETA on the cluster (1.0)
 
-What 0.3 showed: telling the car "CarPlay route active" hides the street, exactly like a real Apple Maps route.
-So the strip switches into guidance mode, but it only fills in the ETA for a route it treats as BMW's own.
-The car already holds Apple Maps' ETA in BMW's guidance data, so 0.4 tests whether a different provider unlocks it.
+During an Apple Maps route on CarPlay, ETA Bar draws the arrival time, time left and distance left on the
+instrument cluster, in the blank space of the bottom strip between the clock and the drive mode. It hides when
+the route ends, so BMW's street name comes back.
 
-1. Start an Apple Maps route on CarPlay. The street disappears from the strip.
-2. Tap **Test A: provider none**. Look at the strip, then tap **Mark in log**.
-3. Tap **Test B: provider other**. Look at the strip, then tap **Mark in log**.
-4. Tap **Test: reset** to send back what the car had.
+It needs the **Cluster renderer** tool from the Store (Waze on cluster installs it too).
 
-Tests, marks and starts also go to `eta-tests.log`, which a route's data never pushes out (0.4.0 lost them: the time left changes every second and filled `eta-probe.log` in minutes). Values that change every second are now logged every 30 s.
+- **Cluster ETA on/off:** turns it on or off. It's on by default.
+- **Preview on cluster:** shows a sample ETA for 30 seconds, with or without a route.
+- **Move up / down / left / right, Bigger, Smaller:** place it. Each tap shows the preview. The place is saved.
+- **Reset place:** goes back to the default place, centred at the bottom.
 
-Tried and ruled out:
-
-- 0.2: writing the ETA into CarPlay's street field. The car takes it, but the strip doesn't show it.
-- 0.3: setting the CarPlay route to active. It hides the street but shows no ETA.
+Why it's drawn rather than sent to BMW's strip: BMW's strip shows an ETA only for BMW's own navigation. 0.2 to
+0.4 tried CarPlay's street field and the guidance state (provider CarPlay, none and other); none changed it.
 
 ## Safety
 
-It calls one method, the guidance service's `setGuidanceState` on the head unit, and only when you tap a test
-button. It never talks to the engine or any other module. Ending the route resets the state.
+It only reads the car's guidance services. It draws one small layer on the cluster through the Cluster
+renderer, never over BMW's own cluster content (BMW's pop-ups and warnings win). It never talks to the engine or any other module. Ending the route resets the state.

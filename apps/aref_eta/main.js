@@ -9,7 +9,9 @@
  * CarPlayManager's guidance flags. Every change goes to eta-probe.log in the data folder (the homelab
  * collects it); the screen shows the trip it would show and the raw values.
  *
- * Tests: see setState() below. Nothing else is written or called.
+ * 1.0: the ETA is drawn on the cluster itself, in the bottom strip's blank space (strip.js, through the Cluster
+ * renderer tool), because BMW's strip shows no ETA for a CarPlay route and no guidance value changes that
+ * (0.2-0.4 tested them). Nothing is written to or called on the car's services: they are only read.
  * Node 8 only (the car's version). Nothing may throw out of a callback: every callback goes through guard().
  */
 const fs = require('fs');
@@ -17,8 +19,9 @@ const path = require('path');
 const mgu = require('./kit/mgu');
 const R = require('./route');
 const HW = require('./kit/homewidget');
+const { Strip } = require('./strip');
 
-const VERSION = '0.4.1';
+const VERSION = '1.0.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -91,26 +94,27 @@ mgu.run({
             let page = 0;
             ui.onClick('BTN_MORE', guard('more', () => { page++; }));
             ui.onClick('BTN_SAVE', guard('mark', () => { note2('MARK (button) ' + snapshot()); }));
-            /*
-             * The test (0.4). 0.3 showed: ProjectedModeGuiding.setGuidanceState(ACTIVE, CAR_PLAY) with no route hides the
-             * street, the same as a real Apple Maps route; during a route it changes nothing (Apple Maps already set that).
-             * So the strip is in guidance mode, but it shows an ETA only for a route it thinks is BMW's own. Test A sends
-             * ACTIVE with provider NONE, Test B with OTHER, during an Apple Maps route, to see whether the strip then reads
-             * Guidance.finalDestinationInfo (which holds the phone's ETA). Test: reset sends what the car had: ACTIVE,
-             * CAR_PLAY while CarPlay guides, else INACTIVE, NONE. Ending the route resets it as well.
-             */
+            // the ETA on the cluster (strip.js)
             let note = null;
-            const say = (text) => { note = { text: text, until: Date.now() + 9000 }; };
-            const setState = (state, provider, label) => {
-                if (!proxies.carplay) { say('Not connected to CarPlay guidance yet'); note2('TEST no proxy'); return; }
-                note2('TEST ' + label + ': setGuidanceState ' + state + ', ' + provider + ' (CarPlay guiding: ' + guiding() + ')');
-                ctx.signals.call(proxies.carplay, 'setGuidanceState', { guidanceState: state, guidingProvider: provider }).then(
-                    (r) => { note2('TEST ' + label + ' accepted ' + json(r)); setTimeout(guard('after', () => note2('TEST ' + label + ' 3 s later: ' + snapshot())), 3000); say(label + ': sent ' + state + ', ' + provider + ' - look at the strip, then tap Mark in log'); },
-                    (e) => { note2('TEST ' + label + ' failed: ' + (e && e.message || e)); say('The car refused it: ' + (e && e.message || e)); });
+            const say = (text) => { note = { text: text, until: Date.now() + 6000 }; };
+            const strip = new Strip(ctx, note2);
+            strip.start();
+            const stripText = () => {
+                const r = trip();
+                if (!guiding() || !r || r.src !== 'carplay') return null;     // BMW's strip is blank only during a CarPlay route
+                return [R.arrivalText(r, Date.now()), R.leftText(r.travelSec), r.dist ? r.dist + ' ' + (r.unit || '') : null].filter(Boolean).join('  \u00b7  ') || null;
             };
-            ui.onClick('BTN_TEST', guard('test a', () => setState('ACTIVE', 'NONE', 'Test A')));
-            ui.onClick('BTN_TEST2', guard('test b', () => setState('ACTIVE', 'OTHER', 'Test B')));
-            ui.onClick('BTN_OFF', guard('test reset', () => (guiding() ? setState('ACTIVE', 'CAR_PLAY', 'Reset') : setState('INACTIVE', 'NONE', 'Reset'))));
+            setInterval(guard('strip', () => strip.update(stripText())), 1000);
+            const placed = () => say('Placed: x ' + strip.cfg.x + ', y ' + strip.cfg.y + ', size ' + Math.round(strip.cfg.scale * 100) + '% - preview on the cluster for 30 s');
+            ui.onClick('BTN_TOGGLE', guard('toggle', () => { strip.toggle(); say('ETA on the cluster: ' + (strip.cfg.on ? 'on' : 'off')); }));
+            ui.onClick('BTN_PREVIEW', guard('preview', () => { strip.preview(); say('Preview on the cluster for 30 s'); }));
+            ui.onClick('BTN_UP', guard('up', () => { strip.move(0, -1); placed(); }));
+            ui.onClick('BTN_DOWN', guard('down', () => { strip.move(0, 1); placed(); }));
+            ui.onClick('BTN_LEFT', guard('left', () => { strip.move(-1, 0); placed(); }));
+            ui.onClick('BTN_RIGHT', guard('right', () => { strip.move(1, 0); placed(); }));
+            ui.onClick('BTN_BIGGER', guard('bigger', () => { strip.size(1); placed(); }));
+            ui.onClick('BTN_SMALLER', guard('smaller', () => { strip.size(-1); placed(); }));
+            ui.onClick('BTN_RESET', guard('reset place', () => { strip.reset(); placed(); }));
 
             const fit = (cv, s, size, w, opt) => {
                 s = String(s || '');
@@ -125,22 +129,23 @@ mgu.run({
                 // the trip, as the bottom strip would show it
                 if (r) {
                     cv.text(R.arrivalText(r, now) || '--', 40, 110, 72, t.text, B);
-                    cv.text('arrival', 40, 140, 20, t.dim, L);
+                    cv.text('arrival', 40, 136, 20, t.dim, L);
                     const parts = [R.leftText(r.travelSec), r.dist ? r.dist + ' ' + (r.unit || '') : null].filter(Boolean).join('   ·   ');
                     cv.text(parts || '', 420, 100, 40, t.text, B);
                     if (r.traffic) { cv.circle(430, 135, 9, TC[r.traffic]); cv.text((r.delaySec ? '+' + R.leftText(r.delaySec) + ' traffic' : 'traffic ' + r.traffic), 450, 142, 20, t.dim, L); }
                     cv.text('from ' + (r.src === 'carplay' ? 'CarPlay' : 'BMW navigation'), W - 40, 60, 18, t.dim, { align: 'right', literal: true });
                 } else {
                     cv.text(guiding() ? 'CarPlay is guiding, but sends no arrival data' : 'No route', 40, 100, 40, t.text, B);
-                    cv.text(guiding() ? 'Logging everything it does send. Drive a bit, then check the log.' : 'Start a route in Apple Maps, Waze or Google Maps on CarPlay.', 40, 140, 20, t.dim, L);
+                    cv.text(guiding() ? 'Waiting for the route\'s arrival data.' : 'Start a route in Apple Maps on CarPlay: the ETA shows on the cluster.', 40, 136, 20, t.dim, L);
                 }
+                cv.text(fit(cv, 'Cluster: ' + (strip.cfg.on ? '' : 'off - ') + strip.status(), 18, W - 80, L), 40, 160, 18, t.dim, L);
                 // the raw values: the probe
                 const keys = Object.keys(vals).sort();
                 const rows = keys.map((k) => k + ' = ' + vals[k].s + '  (' + vals[k].n + ')');
                 subs.forEach((s) => { if (!s.available) rows.push(s.tag + ': not available' + (s.error ? ' - ' + s.error : '')); });
                 if (!rows.length) rows.push('Waiting for the car...');
                 const PER = 11, pages = Math.max(1, Math.ceil(rows.length / PER)), pg = page % pages;
-                cv.fillRect(40, 168, W - 80, 1, t.dim);
+                cv.fillRect(40, 172, W - 80, 1, t.dim);
                 rows.slice(pg * PER, pg * PER + PER).forEach((s, i) => cv.text(fit(cv, s, 17, W - 80, L), 40, 196 + i * 27, 17, i % 2 ? t.dim : t.text, L));
                 cv.text('Page ' + (pg + 1) + ' of ' + pages + (pages > 1 ? ' (More)' : '') + '   ·   Every change is saved to eta-probe.log', W - 40, H - 14, 15, t.dim, { align: 'right', literal: true });
                 if (note && Date.now() < note.until) cv.text(fit(cv, note.text, 22, W - 80, B), 40, H - 14, 22, t.accent2 || t.text, B);
