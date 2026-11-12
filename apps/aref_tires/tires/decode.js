@@ -83,17 +83,22 @@ const RUNFLAT = { RUNFLAT: 'run-flat', NON_MINUS_RUNFLAT: '', PAX: 'PAX' };
 function tire(v, k) {
     if (!v) return null;
     const g = (m) => v[m.replace('#', k)];
-    const w = g('width#'), r = g('relationSide#') !== undefined ? g('relationSide#') : g('crossSection#'), d = g('radius#') !== undefined ? g('radius#') : g('diameter#');
-    if (!(w > 0 && w < 255 && r > 0 && r < 255 && d > 0 && d < 255)) return null;
-    const load = g('indexLoadCapacity#') !== undefined ? g('indexLoadCapacity#') : g('loadIndex#');
+    const rw = g('width#'), rr = g('relationSide#') !== undefined ? g('relationSide#') : g('crossSection#'), rd = g('radius#') !== undefined ? g('radius#') : g('diameter#');
+    if (!(rw > 0 && rw < 255 && rr > 0 && rr < 255 && rd > 0 && rd < 255)) return null;
+    // the car sends steps, not millimetres (its tire list on Nov 12: widths 13 / 16, ratios 4-7, rims 6-8):
+    // width = 95 + 10 x step, ratio = 15 + 5 x step, rim = 11 + step. That decodes the list to the G22's own
+    // sizes (225/45R18 + 255/40R18, 255/35R19, 225/50R17 + 255/45R17 winters). Real millimetres pass as they are.
+    const w = rw < 60 ? 95 + 10 * rw : rw, r = rr < 20 ? 15 + 5 * rr : rr, d = rd < 12 ? 11 + rd : rd;
+    // the load index's step isn't certain (it lands within 1 of the real one), so it's left out of the size
     const speed = name(g('indexSpeed#') !== undefined ? g('indexSpeed#') : g('speedIndex#'));
     const xl = name(g('carcass#')) === 'REIFEN_XL', season = SEASON[name(g('season#'))] || '', rf = RUNFLAT[name(g('runflat#'))] || '';
-    const size = w + '/' + r + 'R' + d + (load > 0 && load < 255 ? ' ' + load + (speed && speed !== 'SIGNAL_UNGUELTIG' ? speed : '') : '');
-    return { size: size, xl: xl, season: season, runflat: rf, text: [size, xl ? 'XL' : '', season, rf].filter(Boolean).join(' · ') };
+    const sp = speed && speed !== 'SIGNAL_UNGUELTIG' && speed.length <= 2 ? ' ' + speed : '';
+    const size = w + '/' + r + 'R' + d + sp;
+    return { size: size, xl: xl, season: season, runflat: rf, raw: [rw, rr, rd], text: [size, xl ? 'XL' : '', season, rf].filter(Boolean).join(' · ') };
 }
 const listEntry = (v) => { const t = tire(v, 'TypeTyre'); return t ? Object.assign(t, { id: v.statusTyreObjectListID }) : null; };
 const frontAxle = (v) => tire(v, 'FrontAxleTypeTyre');
-const rearAxle = (v) => tire(v, 'RearAxleTypeTyre');
+const rearAxle = (v) => tire(v, 'BackAxleTypeTyre');          // the car names it the back axle
 /** What the sensors say is fitted (ERFS: tire data written into the sensors from the tire's QR code). */
 function sensorTire(v) {
     if (!v) return null;

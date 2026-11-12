@@ -1,7 +1,7 @@
 {
   "id": "aref_tires",
   "title": "Tire Setup",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "vendor": "aref",
   "loggingId": "OAR9",
   "description": "The tire pressure monitor as your BMW sees it, in plain English: why auto detect fails, the car's tire list, what's fitted, the last reset, pressures and targets. Sends the iDrive tire menu's own actions (tire list, pick a tire, auto detect, reset, season) with DSC guarded: every write leaves DSC alone, only parked, and DSC is checked before and after.",
@@ -74,6 +74,10 @@
         [
           "BTN_SEASON",
           "Summer / Winter"
+        ],
+        [
+          "BTN_LOAD",
+          "Load (targets)"
         ],
         [
           "BTN_TEST",

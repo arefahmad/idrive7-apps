@@ -53,6 +53,16 @@ test('why auto detect fails, in plain English', () => {
     assert.strictEqual(T.dsc({ displayStatusDSC2: 'DSC_AUS' }).state, 'off');
 });
 
+test('the tire list: the car sends size steps (its own list, Nov 12)', () => {
+    const e = (w, r, d, sp, season, id) => T.listEntry({ widthTypeTyre: w, relationSideTypeTyre: r, radiusTypeTyre: d, indexSpeedTypeTyre: sp,
+        carcassTypeTyre: 'REIFEN_XL', seasonTypeTyre: season, runflatTypeTyre: 'NON_MINUS_RUNFLAT', statusTyreObjectListID: id });
+    assert.strictEqual(e(13, 6, 7, 'H', 'WINTERREIFEN', 1).text, '225/45R18 H · XL · winter');
+    assert.strictEqual(e(16, 5, 7, 'Y', 'SOMMERREIFEN', 3).text, '255/40R18 Y · XL · summer');
+    assert.strictEqual(e(16, 4, 8, 'Y', 'SOMMERREIFEN', 4).size, '255/35R19 Y');
+    assert.strictEqual(T.rearAxle({ widthBackAxleTypeTyre: 16, relationSideBackAxleTypeTyre: 5, radiusBackAxleTypeTyre: 7, indexSpeedBackAxleTypeTyre: 'Y' }).size, '255/40R18 Y');
+    assert.strictEqual(T.frontAxle({ widthFrontAxleTypeTyre: 0 }), null);
+});
+
 let failed = 0;
 tests.forEach(([name, fn]) => {
     try { fn(); console.log('ok   ' + name); } catch (e) { failed++; console.log('FAIL ' + name + '\n     ' + (e && e.stack || e)); }

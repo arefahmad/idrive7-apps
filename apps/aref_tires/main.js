@@ -24,7 +24,7 @@ const fonts = require('./kit/fonts');
 const pack = require('./kit/pack');
 const T = require('./decode');
 
-const VERSION = '0.1.2';
+const VERSION = '0.2.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;
 const ARM_MS = 5000;                  // a change button pressed again within this sends it
@@ -106,7 +106,7 @@ mgu.run({
             let busy = false, alarm = null, armed = null, toast = null;
             const say = (text, tone, ms) => { toast = { text: text, tone: tone || 'info', until: Date.now() + (ms || 5000) }; };
             const LABEL = { list: 'Get the tire list', auto: 'Auto detect', pick: 'Use this tire', reset: 'Reset pressures', summer: 'Summer tires',
-                winter: 'Winter tires', eco: 'Eco pressures', partly: 'Partly loaded', full: 'Fully loaded', test: 'Safe test' };
+                winter: 'Winter tires', eco: 'Load: comfort (lowest targets)', partly: 'Load: partly loaded', full: 'Load: fully loaded (highest targets)', test: 'Safe test' };
             // why a change can't be sent now, or null
             const blocked = () => {
                 if (!settings.get('allow_writes')) return 'Changes are off. Turn on Settings > Allow changes to the car.';
@@ -184,6 +184,14 @@ mgu.run({
             ui.onClick('BTN_RESET', guard('reset', () => send('reset')));
             ui.onClick('BTN_SEASON', guard('season', () => { const st = T.tyreState(val('tpms.statusTyreState')); send(st && st.season === 'summer' ? 'winter' : 'summer'); }));
             ui.onClick('BTN_TEST', guard('test', () => send('test')));
+            // the target pressures come from the tire picked and this load setting (BMW's menu: comfort / partly / fully
+            // loaded); there's no number to type in. Each press of Load steps to the next one (pressed twice to send).
+            const LOADS = ['eco', 'partly', 'full'], LOAD_OF = { 'Eco / comfort': 'eco', 'Partly loaded': 'partly', 'Fully loaded': 'full' };
+            ui.onClick('BTN_LOAD', guard('load', () => {
+                const st = T.tyreState(val('tpms.statusTyreState')), cur = st && LOAD_OF[st.loading];
+                const next = armed && /^(eco|partly|full)$/.test(armed.key) ? armed.key : LOADS[(LOADS.indexOf(cur) + 1) % LOADS.length];
+                send(next);
+            }));
             ui.onClick('BTN_DSC', guard('dsc', dscOn));
 
             /* ---------- drawing ---------- */
@@ -235,12 +243,13 @@ mgu.run({
                     ['Parked', sp === null ? 'unknown' : sp < 0.5 ? 'Yes' : 'No (' + Math.round(sp / 1.609) + ' mph)'],
                 ];
                 rows.forEach((r, i) => kv(cv, dx + 26, ty + 36 + i * 32, dw - 52, r[0], r[1], r[2]));
-                cv.text(settings.get('allow_writes') ? 'Changes to the car: allowed (parked, DSC on, press twice)' : 'Changes to the car: off (Settings)', 40, 470, 17, C.dim2, M);
+                const tgtNote = 'Target pressures come from the tire you pick and Load, then Reset learns them.';
+                cv.text((settings.get('allow_writes') ? 'Changes: allowed (parked, DSC on, press twice). ' : 'Changes: off (Settings). ') + tgtNote, 40, 470, 17, C.dim2, M);
             };
             const drawList = (cv) => {
                 const all = ids(), st = T.tyreState(val('tpms.statusTyreState'));
                 cv.text('The car\'s tire list', 40, 76, 30, C.text, B);
-                cv.text(all.length ? all.length + (st && st.listLength ? ' of ' + st.listLength : '') + ' tires. Previous / Next to choose, Use this tire to pick it.' : 'Press Get list: the car sends its list one tire at a time.', 40, 104, 19, C.dim, M);
+                cv.text(all.length ? all.length + (st && st.listLength ? ' of ' + st.listLength : '') + ' tires the car knows. Find the one on your sidewall (size, then the speed letter), choose it with Previous / Next, then Use this tire.' : 'Press Get list: the car sends its list one tire at a time.', 40, 104, 19, C.dim, M);
                 card(cv, 40, 124, W - 80, 340);
                 const per = 8, first = Math.max(0, Math.min(cursor - 3, all.length - per));
                 all.slice(first, first + per).forEach((id, i) => {
