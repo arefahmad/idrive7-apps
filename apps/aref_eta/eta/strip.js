@@ -10,7 +10,8 @@
  * One small "image" layer on the "panel" target (the whole cluster, 1920 x 720, scene 0x010004f8 of its own, the
  * target M Track and G's Dash's full-screen test draw on), class "content", never exclusive, never contending: BMW's
  * own cluster content in that slot always wins, and the rest of the panel stays transparent. The image is redrawn
- * only when the text changes (about once a minute), so it costs the cluster link nearly nothing.
+ * the moment the route's numbers change (each update the phone sends, a reroute too) and only then: a 720 x 80
+ * picture a few times a minute, so it costs the cluster link nearly nothing.
  *
  * Shown only while CarPlay guides and the car has the route's arrival data (that's when BMW's strip is blank),
  * or for PREVIEW_MS after Preview. Hidden otherwise: the service releases the panel after its linger.

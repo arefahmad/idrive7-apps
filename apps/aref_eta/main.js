@@ -21,12 +21,13 @@ const R = require('./route');
 const HW = require('./kit/homewidget');
 const { Strip, parts } = require('./strip');
 
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
 const NOISY_MS = 30000;         // a value that changes every second during a route (time left) is logged at most this often
 const NOISY = /waypoints|DestinationInfo|travelled/;
+const ROUTE = /^(carplay\.waypoints|cpm\.)/;
 const WATCH = [
     { iface: 'de.bmw.infotainment.navigation.projectedmodeguiding.ProjectedModeGuiding', inst: 'Main_Instance', tag: 'carplay',
         fields: ['waypoints', 'currentRoad', 'activeRouteChange'] },
@@ -64,11 +65,13 @@ mgu.run({
             };
             note2('start ' + VERSION);
 
+            let onRoute = null;
             const put = (key, v) => {
                 const s = json(v), old = vals[key];
                 if (old && old.s === s) return;
                 const now = Date.now();
                 vals[key] = { v: v, s: s, at: now, n: (old ? old.n : 0) + 1, logged: old ? old.logged : 0 };
+                if (ROUTE.test(key) && onRoute) onRoute();          // the cluster ETA follows each update at once (a reroute too)
                 if (NOISY.test(key) && old && now - old.logged < NOISY_MS) return;   // shown on screen, logged every 30 s
                 vals[key].logged = now;
                 write(key + ' = ' + (s.length > 4000 ? s.slice(0, 4000) + '...(' + s.length + ')' : s));
@@ -86,7 +89,9 @@ mgu.run({
             const val = (k) => (vals[k] ? vals[k].v : undefined);
             const trip = () => R.pick({ waypoints: val('carplay.waypoints'), finalDestinationInfo: val('bmw.finalDestinationInfo'),
                 nextDestinationInfo: val('bmw.nextDestinationInfo'), allDestinationsInfo: val('bmw.allDestinationsInfo') });
-            const guiding = () => val('cpm.projectedGuidanceActive') === true;
+            // guiding, and the phone still sends the route: when Apple Maps stops sending it (metadata false) the last
+            // ETA would go stale, so it hides rather than show an old one
+            const guiding = () => val('cpm.projectedGuidanceActive') === true && val('cpm.projectedGuidanceMetadataAvailable') !== false;
 
             let page = 0;
             ui.onClick('BTN_MORE', guard('more', () => { page++; }));
@@ -103,7 +108,8 @@ mgu.run({
             const look = () => strip.setLook(ctx.settings.get('look') || 'plain');
             look();
             ctx.settings.onChange(guard('look', look));
-            setInterval(guard('strip', () => strip.update(stripParts())), 1000);
+            onRoute = guard('strip', () => strip.update(stripParts()));
+            setInterval(onRoute, 1000);
             const placed = () => say('Placed: x ' + strip.cfg.x + ', y ' + strip.cfg.y + ', size ' + Math.round(strip.cfg.scale * 100) + '% - preview on the cluster for 30 s');
             ui.onClick('BTN_TOGGLE', guard('toggle', () => { strip.toggle(); say('ETA on the cluster: ' + (strip.cfg.on ? 'on' : 'off')); }));
             ui.onClick('BTN_PREVIEW', guard('preview', () => { strip.preview(); say('Preview on the cluster for 30 s'); }));

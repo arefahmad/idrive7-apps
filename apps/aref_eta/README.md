@@ -36,6 +36,12 @@ It needs the **Cluster renderer** tool from the Store (Waze on cluster installs 
 - **Move up / down / left / right, Bigger, Smaller:** place it. Each tap shows the preview. The place is saved.
 - **Reset place:** goes back to the default place, where BMW shows the street name.
 
+### Updates (1.1.1)
+
+The ETA redraws the moment the phone sends new route numbers (about every second while Apple Maps guides), so a
+wrong turn shows Apple Maps' new arrival, minutes and miles as soon as it reroutes. If the phone stops sending the
+route (CarPlay's guidance metadata goes off), the ETA hides instead of showing old numbers.
+
 ### Look (1.1)
 
 Apple Maps' style: `6:42 arrival   23 min   14.2 mi`. Values in Inter Bold (the open look-alike of Apple's SF Pro,
