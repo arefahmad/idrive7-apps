@@ -1,0 +1,105 @@
+{
+  "id": "aref_tires",
+  "title": "Tire Setup",
+  "version": "0.1.0",
+  "vendor": "aref",
+  "loggingId": "OAR9",
+  "description": "The tire pressure monitor as your BMW sees it, in plain English: why auto detect fails, the car's tire list, what's fitted, the last reset, pressures and targets. Sends the iDrive tire menu's own actions (tire list, pick a tire, auto detect, reset, season) with DSC guarded: every write leaves DSC alone, only parked, and DSC is checked before and after.",
+  "repoCredit": false,
+  "signals": {
+    "de.bmw.infotainment.vehicle.TPMS": {
+      "statusTyrePressure": "rs",
+      "statusTyreTemperature": "rs",
+      "statusTargetTyrePressure": "rs",
+      "statusTyreState": "rs",
+      "statusAvailableTypeTyreList": "rs",
+      "statusFrontAxleTyre": "rs",
+      "statusRearAxleTyre": "rs",
+      "statusSummerTyre": "rs",
+      "statusWinterTyre": "rs",
+      "statusTyresStatus": "rs",
+      "chassisControl": "rws"
+    },
+    "de.bmw.infotainment.vehicle.TPMSInternalData": {
+      "_optional": "why auto detect fails, the last reset and the sensors' tire data",
+      "statusWheelTypeChange": "rs",
+      "tpmsCalibrationData": "rs",
+      "tpmsErfsActualTireData": "rs",
+      "qrCodeData": "rs",
+      "tyreDataRadioReceiver": "rs",
+      "tpmsInternalLastValues": "rs"
+    },
+    "de.bmw.infotainment.drivingexcitement.FES": {
+      "_optional": "the DSC state: without it no change is sent",
+      "statusDSCSwitchHMI": "rs"
+    },
+    "de.bmw.infotainment.vehicle.Vehicle2": {
+      "statusCarSpeed2": "rs"
+    }
+  },
+  "screens": [
+    {
+      "name": "MAIN",
+      "kind": "canvas",
+      "title": "Tire Setup",
+      "buttons": [
+        [
+          "BTN_VIEW",
+          "Tire list"
+        ],
+        [
+          "BTN_GETLIST",
+          "Get list"
+        ],
+        [
+          "BTN_LPREV",
+          "Previous"
+        ],
+        [
+          "BTN_LNEXT",
+          "Next"
+        ],
+        [
+          "BTN_PICK",
+          "Use this tire"
+        ],
+        [
+          "BTN_AUTO",
+          "Auto detect"
+        ],
+        [
+          "BTN_RESET",
+          "Reset"
+        ],
+        [
+          "BTN_SEASON",
+          "Summer / Winter"
+        ],
+        [
+          "BTN_TEST",
+          "Safe test"
+        ],
+        [
+          "BTN_DSC",
+          "DSC on"
+        ],
+        [
+          "BTN_LOG",
+          "Log"
+        ],
+        [
+          "BTN_SETTINGS",
+          "Settings"
+        ]
+      ]
+    }
+  ],
+  "settings": [
+    {
+      "key": "allow_writes",
+      "label": "Allow changes to the car",
+      "type": "bool",
+      "default": false
+    }
+  ]
+}

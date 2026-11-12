@@ -383,9 +383,56 @@ async function eta() {
     delete stubs['./kit/cluster_render'];
 }
 
+async function tires() {
+    // values in the car's shapes (pressures and temperatures from the M440i's own log, Nov 12); the rest made up
+    let dsc = 'DSC_EIN';
+    const sets = [];
+    const data = {
+        TPMS: { statusTyrePressure: { actualValuePressureTyreFLH: 400, actualValuePressureTyreFRH: 410, actualValuePressureTyreRLH: 380, actualValuePressureTyreRRH: 370 },
+            statusTyreTemperature: { actualValueTemperatureTyreFLH: 113, actualValueTemperatureTyreFRH: 112, actualValueTemperatureTyreRLH: 108, actualValueTemperatureTyreRRH: 106 },
+            statusTargetTyrePressure: { targetPressureTyreFLH: 65533, targetPressureTyreFRH: 65533, targetPressureTyreRLH: 65533, targetPressureTyreRRH: 65533 },
+            statusTyreState: { statusSelectionTyre: 'AUSWAHL', lengthObjectListTypeTyre: 3, statusTyreSeasonTyrePressureControl: 'SOMMERREIFEN', statusTargetPressureLoadingConditionTyrePressureControl: 'ECO_SOLLDRUCK', statusManualSelection: 'MANUELLE_REIFENAUSWAHL' },
+            statusFrontAxleTyre: { widthFrontAxleTypeTyre: 225, relationSideFrontAxleTypeTyre: 40, radiusFrontAxleTypeTyre: 19, indexLoadCapacityFrontAxleTypeTyre: 93, indexSpeedFrontAxleTypeTyre: 'W', carcassFrontAxleTypeTyre: 'REIFEN_XL', seasonFrontAxleTypeTyre: 'SOMMERREIFEN', runflatFrontAxleTypeTyre: 'RUNFLAT' },
+            statusRearAxleTyre: { widthRearAxleTypeTyre: 254, relationSideRearAxleTypeTyre: 35, radiusRearAxleTypeTyre: 19, indexLoadCapacityRearAxleTypeTyre: 96, indexSpeedRearAxleTypeTyre: 'W', carcassRearAxleTypeTyre: 'REIFEN_XL', seasonRearAxleTypeTyre: 'SOMMERREIFEN', runflatRearAxleTypeTyre: 'RUNFLAT' },
+        },
+        TPMSInternalData: { statusWheelTypeChange: { statusWheelTypeChangePosition: 0, statusWheelTypeChangeDetection: 'RDC_DEGRADIERT_KEIN_PASSENDER_REIFEN_GEFUNDEN' },
+            tpmsCalibrationData: { tpmsCalibrationPlausibility: 'FAILED', tpmsCalibrationCalibrationType: 'ERFS_HMI_USER_INITIATED_SELECTION', tpmsCalibrationMileage: 118590 },
+            tpmsErfsActualTireData: { tpmsErfsActTireDimSummerMounted: 'TIRE_MOUNTED' } },
+        Vehicle2: { statusCarSpeed2: { speedVehicleCentreOfGravity: 0 } },
+    };
+    const list = [[225, 40, 19, 93], [225, 45, 18, 95], [245, 40, 18, 97]];
+    const signals = {
+        watch: (iface, inst, h) => {
+            const k = iface.split('.').pop();
+            if (k === 'FES') h.statusDSCSwitchHMI({ displayStatusDSC2: dsc });
+            Object.keys(data[k] || {}).forEach((f) => h[f] && h[f](data[k][f]));
+            if (k === 'TPMS') list.forEach((t, i) => h.statusAvailableTypeTyreList({ widthTypeTyre: t[0], relationSideTypeTyre: t[1], radiusTypeTyre: t[2], indexLoadCapacityTypeTyre: t[3], indexSpeedTypeTyre: 'W', carcassTypeTyre: 'REIFEN_XL', seasonTypeTyre: 'SOMMERREIFEN', runflatTypeTyre: 'RUNFLAT', statusTyreObjectListID: i + 1 }));
+            const proxy = { tag: k, h };
+            if (k === 'FES') signals.fes = (v) => h.statusDSCSwitchHMI(v);
+            return Promise.resolve({ available: true, error: null, proxy });
+        },
+        set: (p, field, v) => { sets.push([field, v]); if (signals.flip) signals.fes({ displayStatusDSC2: 'DSC_AUS' }); return Promise.resolve(); },
+    };
+    const own = { scale: 1.165, ox: 70, oy: 36, extra: 53 };
+    const h = harness('aref_tires', { signals, own, settings: { allow_writes: true } });
+    await h.ready();
+    await h.shot('MAIN', 'status.png');
+    h.clicks.BTN_VIEW(); h.clicks.BTN_LNEXT(); await h.shot('MAIN', 'tire-list.png');
+    // a write: pressed twice, DSC stays on
+    h.clicks.BTN_RESET(); h.clicks.BTN_RESET();
+    await new Promise((r) => setTimeout(r, 4300));
+    // a write after which DSC changes (simulated): the alarm
+    signals.flip = true; h.clicks.BTN_TEST(); h.clicks.BTN_TEST();
+    await new Promise((r) => setTimeout(r, 4300));
+    h.clicks.BTN_LOG(); await h.shot('MAIN', 'log.png');
+    const dscOk = sets.every((s) => s[1].operationModeTractionDSC === 'SIGNAL_UNGUELTIG');
+    console.log('tires: ' + sets.length + ' writes, DSC member left alone in every one: ' + dscOk);
+    console.log(fs.readFileSync(path.join(h.ctx.dataDir, 'tires.log'), 'utf8').split('\n').filter((l) => /WRITE|DSC|ALARM/.test(l)).join('\n'));
+}
+
 (async () => {
     const only = process.argv[2];
-    const all = { carcare: carCare, drivelog: driveLog, faultwatch: faultWatch, carlyrics: carLyrics, explorer, misfire, carwatch: carWatch, eta };
+    const all = { carcare: carCare, drivelog: driveLog, faultwatch: faultWatch, carlyrics: carLyrics, explorer, misfire, carwatch: carWatch, eta, tires };
     for (const k of Object.keys(all)) if (!only || only === k) await all[k]();
     Date.now = realNow;
     setTimeout(() => process.exit(0), 100);
