@@ -27,6 +27,7 @@ const pack = require('./kit/pack');
 const LOOK = require('./look');
 const IW = LOOK.IW, IH = LOOK.IH;         // the image; the rect on the cluster scales it (bilinear)
 const PREVIEW_MS = 30000;
+const MAP_WAIT_MS = 3000;            // longest the ETA waits for the cluster's map to come up
 const DEF = { on: true, x: 968, y: 668, scale: 1 };   // x, y: the picture's centre on the cluster (px), where BMW's street name sits (measured on a G-series cluster photo); scale of IW x IH
 const LIMIT = { x: [200, 1720], y: [40, 700], scale: [0.5, 2] };
 const STEP = { x: 20, y: 6, scale: 0.1 };
@@ -42,6 +43,7 @@ class Strip {
         try { Object.assign(this.cfg, JSON.parse(fs.readFileSync(this.file, 'utf8'))); } catch (e) { /* first run */ }
         this.cr = null; this.ref = null; this.ready = false;
         this.text = null; this.shown = false; this.previewUntil = 0;
+        this.map = { state: null, at: 0 }; this.pending = null;
         this.style = Object.assign({}, LOOK.DEFAULT_STYLE); this.styleKey = undefined; this.image = null;
         this.state = { client: 'starting', layer: '', target: '', reason: '' };
         // Inter (OFL), the open look-alike of Apple's SF Pro (Car Lyrics' atlases): data/fonts -> fonts.pack
@@ -79,6 +81,12 @@ class Strip {
                 this.state.layer = state; this.state.reason = reason || '';
             });
             cr.on('target', (name, state, holder, reason) => {
+                if (name === 'map') {        // Waze on cluster's map (CarPlay's map on the cluster): the ETA comes and goes with it
+                    if (state !== this.map.state) this.note('cluster: map ' + state + (holder ? ' by ' + holder : ''));
+                    this.map = { state: state, at: Date.now() };
+                    if (state === 'shown' && this.pending) this.update(this.pending.route, this.pending.arrival);
+                    return;
+                }
                 if (name !== 'panel') return;
                 const s = state + (holder ? ' by ' + holder : '') + (reason ? ' (' + reason + ')' : '');
                 if (s !== this.state.target) this.note('cluster: panel ' + s);
@@ -119,9 +127,20 @@ class Strip {
                 if (this.cr && this.ref) this.cr.pixels(this.ref, null, this.pixels);
             }
             if (!this.cr || !this.ref) return;
+            // in step with the cluster's map: while it's coming up (acquiring, up to MAP_WAIT_MS), the ETA waits and
+            // then fades in with it; the panel's own 250 ms fade plus a short rise make the entrance
+            const mapComing = this.map.state === 'acquiring' && Date.now() - this.map.at < MAP_WAIT_MS;
+            this.pending = want && !this.shown && mapComing ? { route: route, arrival: arrival } : null;
+            if (this.pending) { setTimeout(() => { if (this.pending) this.update(this.pending.route, this.pending.arrival); }, MAP_WAIT_MS + 50); return; }
             if (want !== this.shown) {
                 this.shown = want;
                 this.cr.set(this.ref, { visible: want });
+                if (want && this.cr.animate) {
+                    try {
+                        if (this.rise && this.cr.stop) this.cr.stop(this.ref, this.rise);      // one at a time (a layer plays at most 16)
+                        this.rise = this.cr.animate(this.ref, { property: 'translate', keys: '0:0,14,0 320:0,0,0' });
+                    } catch (e) { /* an older renderer: no rise */ }
+                }
                 this.note('cluster: ' + (want ? 'show ' + p.map((q) => q.v + (q.u ? ' ' + q.u : '')).join(' · ') : 'hide'));
             }
         } catch (e) { this.state.reason = 'draw: ' + e.message; }

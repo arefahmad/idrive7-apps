@@ -42,6 +42,13 @@ The ETA redraws the moment the phone sends new route numbers (about every second
 wrong turn shows Apple Maps' new arrival, minutes and miles as soon as it reroutes. If the phone stops sending the
 route (CarPlay's guidance metadata goes off), the ETA hides instead of showing old numbers.
 
+### In step with the cluster's map (1.2.1)
+
+When Waze on cluster (CarPlay's map on the cluster) is coming up, the ETA waits for it (up to 3 s) and appears
+with it: the cluster's own 250 ms fade plus a short rise. A route the phone has finished but not cleared (0 ft,
+nothing left) no longer flashes up. After a head-unit restart the car starts apps about 15 s after its own
+tools, so the ETA can only come that much after the map; on a normal start ETA Bar is already running.
+
 ### Looks (1.2)
 
 Designed to look like Apple made it: Inter (the open look-alike of SF Pro), Apple's dark-mode label colours and

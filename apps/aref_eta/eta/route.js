@@ -50,6 +50,8 @@ function decode(d) {
         dist: dist, unit: UNITS[enumName(fd.unit)] || null, rawDist: num(fd.rawDistance),
         final: !!d.isCheckeredFlag,
     };
+    // a finished route the phone hasn't cleared yet (0 ft, 0 s left): nothing to show
+    if ((out.rawDist === 0 || out.dist === '0') && !out.travelSec) return null;
     return out.arrival || out.travelSec || out.dist ? out : null;
 }
 
