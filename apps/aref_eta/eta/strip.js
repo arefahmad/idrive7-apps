@@ -138,7 +138,7 @@ class Strip {
         if (this.streetText) { this.streetText = null; this.text = null; }
         const preview = Date.now() < this.previewUntil;
         const p = route ? LOOK.parts(route, arrival, this.style) : preview ? LOOK.parts(LOOK.SAMPLE_ROUTE, '6:42 PM', this.style) : null;
-        const want = !!(this.cfg.on && p && (route || preview));
+        const want = !!(this.cfg.on && p && (route || preview)) && this.onSchedule(!!(route || preview), arrival);
         const key = p ? JSON.stringify(p) + this.styleKey : null;
         try {
             if (key && key !== this.text) {
@@ -208,7 +208,7 @@ class Strip {
                 this.note('island: pop ' + p.map((q) => q.v + (q.u ? ' ' + q.u : '')).join(' · ') + ' (' + every + ')');
                 return;
             }
-            if (preview || every === 'stay') { if (!I.open) { I.pop(); isl.lastPop = now; } return; }
+            if (every === 'stay') { if (!I.open) { I.pop(); isl.lastPop = now; } return; }
             const sec = Number(every), hold = every === 'change' ? HOLD_MS + 2000 : Math.min(HOLD_MS, Math.max(3000, sec * 500));
             if (I.open) { if (now - isl.lastPop >= hold) I.close(); return; }
             const due = every === 'change' ? arrival !== isl.arrival : now - isl.lastPop >= sec * 1000;
@@ -252,7 +252,25 @@ class Strip {
     toggle() { this.cfg.on = !this.cfg.on; this.save(); this.note('cluster ETA ' + (this.cfg.on ? 'on' : 'off')); }
     preview() {
         this.previewUntil = Date.now() + PREVIEW_MS;
+        this.btm = null;                          // the bottom strip's schedule starts over: it shows now
         if (this.style.preset === 'island' && this.island && !this.island.open) { this.island.pop(); this.isl.active = true; this.isl.lastPop = Date.now(); }
+    }
+
+    /**
+     * The bottom strip on Settings' schedule (as the island): always, or shown for up to HOLD_MS every 10 s .. 5 min,
+     * or when the arrival time changes. Between showings the panel is released, so BMW's own cluster widgets (music,
+     * trip computer: the same cluster slot) come back.
+     */
+    onSchedule(active, arrival) {
+        const every = this.style.every || 'stay', now = Date.now();
+        if (!active) { this.btm = null; return false; }
+        if (every === 'stay') return true;
+        const sec = Number(every), hold = every === 'change' ? HOLD_MS + 2000 : Math.min(HOLD_MS, Math.max(3000, sec * 500));
+        const b = this.btm;
+        if (!b) { this.btm = { last: now, arrival: arrival }; return true; }
+        if (now - b.last < hold) return true;
+        if (every === 'change' ? arrival !== b.arrival : now - b.last >= sec * 1000) { b.last = now; b.arrival = arrival; return true; }
+        return false;
     }
 
     status() {

@@ -23,7 +23,7 @@ const { Strip } = require('./strip');
 const LOOK = require('./look');
 const { setImage } = require('./kit/record');
 
-const VERSION = '1.4.2';
+const VERSION = '1.5.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -111,8 +111,12 @@ mgu.run({
             const say = (text) => { note = { text: text, until: Date.now() + 6000 }; };
             const strip = new Strip(ctx, note2);
             strip.start();
+            // the route the cluster shows, or null. Turning the car off doesn't always say so: CarPlay's signals just
+            // stop (Nov 12: the ETA stayed up). A route whose numbers haven't moved for STALE_MS counts as gone.
+            const STALE_MS = 90000;
             const stripRoute = () => {
-                const r = trip();
+                const r = trip(), w = vals['carplay.waypoints'];
+                if (w && Date.now() - w.at > STALE_MS) return null;
                 return guiding() && r && r.src === 'carplay' ? r : null;   // BMW's strip is blank only during a CarPlay route
             };
             const style = () => {

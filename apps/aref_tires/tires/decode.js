@@ -123,6 +123,9 @@ function tyreState(v) {
         selection: SELECTION[name(v.statusSelectionTyre)] || null, loading: LOADING[name(v.statusTargetPressureLoadingConditionTyrePressureControl)] || null,
         season: SEASON[name(v.statusTyreSeasonTyrePressureControl)] || null, mode: MANUAL[name(v.statusManualSelection)] || null,
         listLength: v.lengthObjectListTypeTyre > 0 && v.lengthObjectListTypeTyre < 255 ? v.lengthObjectListTypeTyre : null,
+        // the iDrive menu's progress bar while it detects the tires: 0-100 %, then 253 when it failed (Nov 12: 0 -> 100
+        // in about 2 min, then 253, then 254), 254 idle
+        progress: v.qualifierRDCInitializationDisplay <= 100 ? v.qualifierRDCInitializationDisplay : v.qualifierRDCInitializationDisplay === 253 ? 'failed' : null,
     };
 }
 

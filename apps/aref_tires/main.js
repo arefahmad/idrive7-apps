@@ -24,7 +24,7 @@ const fonts = require('./kit/fonts');
 const pack = require('./kit/pack');
 const T = require('./decode');
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;
 const ARM_MS = 5000;                  // a change button pressed again within this sends it
@@ -209,7 +209,11 @@ mgu.run({
             const kv = (cv, x, y, w, k, v, c) => { cv.text(k, x, y, 19, C.dim, M); cv.text(fit(cv, v || '-', 22, w * 0.6, B), x + w, y, 22, c || C.text, Object.assign({ align: 'right' }, B)); };
 
             const drawStatus = (cv) => {
-                const det = T.detection(val('rdc.statusWheelTypeChange'));
+                const st0 = T.tyreState(val('tpms.statusTyreState'));
+                // the car's own reason (TPMSInternalData) isn't offered on this car: the menu's progress stands in
+                const det = T.detection(val('rdc.statusWheelTypeChange')) || (st0 && st0.progress === 'failed'
+                    ? { tone: 'bad', title: 'Tire detection failed', text: 'The car went through the whole check and gave up: the tires don\'t match what it can learn. Pick your tire from the list instead (season first), then Reset.' }
+                    : st0 && typeof st0.progress === 'number' ? { tone: 'busy', title: 'Detecting tires: ' + st0.progress + '%', text: 'Keep driving. The car is checking the sensors against its tire list.' } : null);
                 const tone = det ? TONE[det.tone] || C.dim : C.dim2;
                 cv.circle(52, 68, 8, tone);
                 cv.text(fit(cv, det ? det.title : 'Waiting for the tire monitor', 30, 900, B), 72, 79, 30, C.text, B);
@@ -234,11 +238,11 @@ mgu.run({
                 const rows = [
                     ['Car thinks fitted (front)', fa ? fa.text : null],
                     ['Car thinks fitted (rear)', ra ? ra.text : null],
-                    ['Sensors say fitted', se && se.tire ? se.tire.text : se ? (se.mounted ? 'mounted, no size stored' : 'no tire data in the sensors') : null],
+                    ['Sensors say fitted', se && se.tire ? se.tire.text : se ? (se.mounted ? 'mounted, no size stored' : 'no tire data in the sensors') : 'not shared by this car'],
                     ['Tire picked', st ? [st.mode, st.selection].filter(Boolean).join(', ') : null],
-                    ['Last reset', cal ? cal.type + (cal.mileage ? ' at ' + Math.round(cal.mileage / 1.609344).toLocaleString('en-US') + ' mi' : '') : null],
-                    ['Reset result', cal ? cal.result : null, cal ? TONE[cal.tone] : null],
-                    ['Season / load', st ? [st.season, st.loading].filter(Boolean).join(', ') : null],
+                    ['Last reset', cal ? cal.type + (cal.mileage ? ' at ' + Math.round(cal.mileage / 1.609344).toLocaleString('en-US') + ' mi' : '') : st && st.progress === 'failed' ? 'Detection failed' : st && typeof st.progress === 'number' ? 'Detecting: ' + st.progress + '%' : 'not shared by this car', cal ? null : st && st.progress === 'failed' ? C.red : null],
+                    ['Reset result', cal ? cal.result : '-', cal ? TONE[cal.tone] : null],
+                    ['Season / load', st ? [st.season, st.loading].filter(Boolean).join(', ') : null, st && st.season === 'winter' ? C.orange : null],
                     ['DSC', d ? d.state.charAt(0).toUpperCase() + d.state.slice(1) : 'unknown', d && d.state === 'on' ? C.green : C.orange],
                     ['Parked', sp === null ? 'unknown' : sp < 0.5 ? 'Yes' : 'No (' + Math.round(sp / 1.609) + ' mph)'],
                 ];
