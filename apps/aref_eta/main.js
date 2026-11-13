@@ -22,8 +22,14 @@ const HW = require('./kit/homewidget');
 const { Strip } = require('./strip');
 const LOOK = require('./look');
 const { setImage } = require('./kit/record');
+const Car = require('./kit/car');
+const SLOT = require('./slot');
+// what's playing and its cover, for the second slot (Car Lyrics' modules, shared in app.json)
+const NP = require('./nowplaying');
+const ART = require('./artwork');
+const http = require('./http');
 
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -141,6 +147,42 @@ mgu.run({
                 (e) => write('subscribe street failed: ' + e.message));
             const textOf = (v) => { const e = v && v.elements; return Array.isArray(e) && e.length ? e.map((x) => x && x.text).filter(Boolean).join(' ') || null : null; };
             const road = () => navStreet || textOf(val('carplay.currentRoad'));
+            // the second slot: oil / gear / g / clock / music where BMW's widgets are, while the strip holds the panel
+            const car = new Car(ctx, ['temps', 'gear', 'accel', 'program'], { demo: false });
+            const NP_IFACES = [
+                { iface: 'de.bmw.infotainment.a4a.carplay.CarPlayManager', instances: ['CarPlayManagerInst1'] },
+                { iface: 'de.bmw.infotainment.entertainment.mediaplayer.MediaPlayer', instances: [] },
+                { iface: 'de.bmw.infotainment.hmi.hmimediastate.HmiMediaState', instances: [] },
+                { iface: 'de.bmw.infotainment.entertainment.dynamicmediaplayer.DynamicMediaPlayer', instances: [] },
+            ];
+            let np = null, artwork = null;
+            const slotKind = () => ctx.settings.get('second_slot') || 'off';
+            const covers = {};          // artwork ver -> { px, n } (150 px)
+            const coverFor = (t) => {
+                if (!artwork || !t || !t.title) return null;
+                const e = artwork.get({ title: t.title, artist: t.artist, album: t.album });
+                if (e.state !== 'ready') return null;
+                if (!covers[e.ver]) { Object.keys(covers).forEach((k) => delete covers[k]); covers[e.ver] = { px: ART.squareResample(e.cover, ART.ART_PX, ART.ART_PX, 150, 0).px, n: 150 }; }
+                return covers[e.ver];
+            };
+            setInterval(guard('slot', () => {
+                if (!strip.slot) return;
+                const kind = slotKind();
+                if (kind === 'music' && !np) {          // started on first use: it subscribes to a lot
+                    np = new NP.NowPlaying(ctx.signals, log, NP_IFACES);
+                    np.start().catch((e) => log.warn('nowplaying: ' + e.message));
+                    const net = http.client(ctx.dataDir);
+                    artwork = new ART.Artwork((m, h, p, hd) => net.request(m, h, p, hd), log);
+                }
+                const t = kind === 'music' && np ? np.track() : null;
+                strip.slot.update(kind !== 'off' && strip.shown, SLOT.content(kind, car.data(), Date.now(), t, coverFor(t)));
+            }), 500);
+            ui.onClick('BTN_TARGET', guard('target', () => {
+                strip.moving = strip.moving === 'slot' ? null : 'slot';
+                try { ui.text('BTN_TARGET', strip.moving === 'slot' ? 'Moving: 2nd slot' : 'Moving: ETA'); } catch (e) { /* */ }
+                say(strip.moving === 'slot' ? 'Up, Down, Left, Right and Bigger / Smaller now move the second slot.' : 'The buttons move the ETA again.');
+            }));
+
             onRoute = guard('strip', () => { const r = stripRoute(); strip.update(r, r ? R.arrivalText(r, Date.now()) : null, road()); });
             setInterval(onRoute, 1000);
             const placed = () => say('Moved. Showing a preview on the cluster for 30 seconds.');

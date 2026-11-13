@@ -26,6 +26,7 @@ const pack = require('./kit/pack');
 
 const LOOK = require('./look');
 const ISL = require('./island');
+const SLOT = require('./slot');
 const IW = LOOK.IW, IH = LOOK.IH;         // the image; the rect on the cluster scales it (bilinear)
 const PREVIEW_MS = 30000;
 const MAP_WAIT_MS = 3000;            // longest the ETA waits for the cluster's map to come up
@@ -113,6 +114,8 @@ class Strip {
                 sampling: 'bilinear', fps: 2, visible: false });
             this.island = new ISL.Island(cr, this.note);
             this.island.create(this.cfg.islandMap, IW, IH, 'map', this.style.look);
+            this.slot = new SLOT.Slot(cr, this.fonts, this.note, this.cfg.slot);
+            this.slot.create();
             cr.connect();
         } catch (e) {
             this.state.client = 'failed: ' + e.message;
@@ -227,25 +230,30 @@ class Strip {
     showing() { return !!(this.shown || (this.island && this.island.open) || this.isl.active); }
 
     /** Where the current preset sits: the bottom strip's place (cfg) or the island's (cfg.island). */
-    spot() { return this.style.preset === 'island' ? this.cfg.islandMap : this.cfg; }
+    spot() {
+        if (this.moving === 'slot') return (this.cfg.slot = Object.assign({}, SLOT.DEF, this.cfg.slot));
+        return this.style.preset === 'island' ? this.cfg.islandMap : this.cfg;
+    }
 
     place() {
         try {
             const r = this.rect();
             if (this.cr && this.ref) this.cr.set(this.ref, { x: r.x, y: r.y, w: r.w, h: r.h });
             if (this.island) this.island.move(this.cfg.islandMap);
+            if (this.slot) this.slot.move(this.cfg.slot);
         } catch (e) { /* next */ }
         this.save();
     }
     move(dx, dy) {
-        const isl = this.style.preset === 'island', o = this.spot(), st = isl ? STEP_ISLAND : STEP, lim = isl ? LIMIT_ISLAND : LIMIT;
+        const isl = this.style.preset === 'island' && this.moving !== 'slot', o = this.spot(), st = isl ? STEP_ISLAND : this.moving === 'slot' ? STEP_ISLAND : STEP, lim = isl ? LIMIT_ISLAND : LIMIT;
         o.x = clamp(o.x + dx * st.x, lim.x); o.y = clamp(o.y + dy * st.y, lim.y);
-        this.note('placed ' + (this.style.preset === 'island' ? 'island' : 'strip') + ' at x ' + o.x + ', y ' + o.y + ', ' + Math.round(o.scale * 100) + '%');
+        this.note('placed ' + (this.moving === 'slot' ? 'second slot' : this.style.preset === 'island' ? 'island' : 'strip') + ' at x ' + o.x + ', y ' + o.y + ', ' + Math.round(o.scale * 100) + '%');
         this.place(); this.preview();
     }
     size(d) { const o = this.spot(); o.scale = clamp(Math.round((o.scale + d * STEP.scale) * 10) / 10, LIMIT.scale); this.place(); this.preview(); }
     reset() {
-        if (this.style.preset === 'island') this.cfg.islandMap = Object.assign({}, DEF_ISLAND);
+        if (this.moving === 'slot') this.cfg.slot = Object.assign({}, SLOT.DEF);
+        else if (this.style.preset === 'island') this.cfg.islandMap = Object.assign({}, DEF_ISLAND);
         else this.cfg = Object.assign({}, DEF, { on: this.cfg.on, islandMap: this.cfg.islandMap });
         this.place(); this.preview();
     }

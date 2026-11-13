@@ -2,7 +2,7 @@
   "id": "aref_eta",
   "title": "ETA Bar",
   "description": "Apple Maps' arrival time, time left and distance on the instrument cluster while Apple Maps guides on CarPlay. Two presets: the bottom strip's blank space (black, smoked, outline or plain), or an island at the top that pops out of the driver attention camera like iPhone's Dynamic Island, once or every 10 s to 5 min. Updates with every route change. Starts with the car. Needs the Cluster renderer tool from the Store.",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "vendor": "aref",
   "loggingId": "OAR7",
   "mguAppStartType": "autostart",
@@ -76,15 +76,32 @@
       "travelledDistance": "rs",
       "travelledTime": "rs"
     },
-    "de.bmw.infotainment.a4a.carplay.CarPlayManager": {
-      "_instances": "CarPlayManagerInst1",
-      "projectedGuidanceActive": "rs",
-      "projectedGuidanceMetadataAvailable": "rs"
-    },
+    "de.bmw.infotainment.a4a.carplay.CarPlayManager": "*",
     "de.bmw.infotainment.navigation.navigationstatus.NavigationStatus": {
       "_optional": "the street name under the island",
       "currentLocation": "rs"
-    }
+    },
+    "de.bmw.infotainment.vehicle.CDS": {
+      "_optional": "oil and coolant temperature in the second slot",
+      "statusEngineTemperature": "rs"
+    },
+    "de.bmw.infotainment.vehicle.CDS2": {
+      "_optional": "g in the second slot",
+      "statusLongitudinalAccelerationMassCenter": "rs",
+      "statusLateralAccelerationMassCenter": "rs"
+    },
+    "de.bmw.infrastructure.VehicleInformation": {
+      "_optional": "the gear in the second slot",
+      "statusGearboxDrive": "s",
+      "DataPowerTrain2": "s"
+    },
+    "de.bmw.infotainment.misc.MDrive": {
+      "_optional": "the gearbox program (S / M) in the second slot",
+      "dataDisplayGearbox": "s"
+    },
+    "de.bmw.infotainment.entertainment.mediaplayer.MediaPlayer": "*",
+    "de.bmw.infotainment.hmi.hmimediastate.HmiMediaState": "*",
+    "de.bmw.infotainment.entertainment.dynamicmediaplayer.DynamicMediaPlayer": "*"
   },
   "screens": [
     {
@@ -127,6 +144,10 @@
         [
           "BTN_RESET",
           "Reset"
+        ],
+        [
+          "BTN_TARGET",
+          "Moving: ETA"
         ],
         [
           "BTN_MORE",
@@ -239,6 +260,38 @@
       ]
     },
     {
+      "key": "second_slot",
+      "label": "Second slot (right, while the bottom strip shows)",
+      "type": "choice",
+      "default": "off",
+      "options": [
+        [
+          "off",
+          "Off"
+        ],
+        [
+          "engine",
+          "Oil temp + gear"
+        ],
+        [
+          "temps",
+          "Oil + coolant temp"
+        ],
+        [
+          "g",
+          "G-force"
+        ],
+        [
+          "clock",
+          "Clock"
+        ],
+        [
+          "music",
+          "Now playing + album cover"
+        ]
+      ]
+    },
+    {
       "key": "show_arrival",
       "label": "Show arrival time",
       "type": "bool",
@@ -272,5 +325,13 @@
   "repoCredit": false,
   "retiredSettings": [
     "theme"
-  ]
+  ],
+  "share": [
+    "aref_carlyrics/car/nowplaying.js",
+    "aref_carlyrics/art/artwork.js",
+    "aref_carlyrics/stage/lyrics.js",
+    "aref_carlyrics/vendor/jpeg_decoder.js",
+    "aref_carlyrics/net/http.js"
+  ],
+  "internet": true
 }

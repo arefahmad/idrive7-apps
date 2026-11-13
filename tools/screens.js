@@ -48,10 +48,16 @@ Module._resolveFilename = function (req, parent, isMain, opts) {
     if (stubs[req]) return 'stub:' + req;
     if (req.indexOf('./kit/') === 0) return resolve0.call(this, path.join(RUNTIME, req.slice(6)), parent, isMain, opts);
     // an app module required as './name': installed side by side on the car, kept in folders here
-    if (req.indexOf('./') === 0 && parent && parent.filename && parent.filename.indexOf(appDir) === 0) {
+    if (req.indexOf('./') === 0 && parent && parent.filename && (parent.filename.indexOf(appDir) === 0 || parent.filename.indexOf(path.join(ROOT, 'apps')) === 0)) {
         const name = req.slice(2).replace(/\.js$/, '') + '.js';
         const found = walk(appDir).find((f) => path.basename(f) === name);
         if (found) return found;
+        // app.json "share": another app's module, installed beside the app's own
+        try {
+            const share = JSON.parse(fs.readFileSync(path.join(appDir, 'app.json'), 'utf8')).share || [];
+            const rel = share.find((r) => path.basename(r) === name);
+            if (rel) return path.join(ROOT, 'apps', rel);
+        } catch (e) { /* no app.json */ }
     }
     return resolve0.call(this, req, parent, isMain, opts);
 };
