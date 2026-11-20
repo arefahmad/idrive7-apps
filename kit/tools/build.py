@@ -564,8 +564,10 @@ def build_start_widget(spec, app_id, icon_src, out, pkg_out=None):
                                              'SelectionName': {'value': sid_name, 'type': 'StringId'},
                                              'SelectionIcon': {'value': icon, 'type': 'ResourceId'}}}}}}}
     json.dump(ui, open(os.path.join(out, 'uiDescription', 'uiDescription.json'), 'w', encoding='utf-8', newline='\n'), indent=1)
+    widget_strings = {sid_name: name}
+    widget_strings.update({'SID_CN_DYNAMIC_%04d' % n: '' for n in range(256)})
     for lang in LANGS:
-        json.dump({sid_name: name}, open(os.path.join(out, 'strings', lang + '.json'), 'w', encoding='utf-8', newline='\n'), ensure_ascii=False)
+        json.dump(widget_strings, open(os.path.join(out, 'strings', lang + '.json'), 'w', encoding='utf-8', newline='\n'), ensure_ascii=False)
     shutil.copy(icon_src, os.path.join(out, 'resources', icon))
     if pkg_out:
         # mgu-store (local kit patch): the Store installs only the npm package (dist/<id>@<ver>.tgz)
@@ -588,7 +590,7 @@ def build_start_widget(spec, app_id, icon_src, out, pkg_out=None):
         open(os.path.join(pkg_out, 'uiDescriptions', 'ID7', 'application.xml'), 'w', encoding='utf-8', newline='\n').write(xml)
         json.dump(ui, open(os.path.join(pkg_out, 'uiDescriptions', 'ID7', 'uiDescription.json'), 'w', encoding='utf-8', newline='\n'), indent=1)
         for lang in LANGS:
-            json.dump({sid_name: name}, open(os.path.join(pkg_out, 'variantGroups', 'Common', 'texts', lang + '.json'), 'w', encoding='utf-8', newline='\n'), ensure_ascii=False)
+            json.dump(widget_strings, open(os.path.join(pkg_out, 'variantGroups', 'Common', 'texts', lang + '.json'), 'w', encoding='utf-8', newline='\n'), ensure_ascii=False)
         shutil.copy(icon_src, os.path.join(pkg_out, 'variantGroups', 'Common', 'images', icon))
     return {'component': comp, 'layout': layout, 'stream': stream}
 

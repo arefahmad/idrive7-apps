@@ -16,6 +16,7 @@ const path = require('path');
 const mgu = require('./kit/mgu');
 const C = require('./items');
 const HW = require('./kit/homewidget');
+const { serviceIntervalText } = require('./kit/service-text');
 
 const VERSION = '0.2.3';
 const W = 1600, H = 520;
@@ -148,7 +149,7 @@ mgu.run({
                         const bx = 470, bw = 520;
                         cv.roundRect(bx, y + 14, bw, 12, 6, t.track || '#222329');
                         if (r.known) cv.roundRect(bx, y + 14, Math.max(12, Math.min(1, r.frac) * bw), 12, 6, col);
-                        cv.text(fit(cv, C.leftText(r, settings.get('units')), 22, 330, L), 1020, y + 26, 22, col, L);
+                        cv.text(fit(cv, serviceIntervalText(C.leftText(r, settings.get('units'))), 22, 330, L), 1020, y + 26, 22, col, L);
                         cv.text(rec ? 'last ' + when(rec.at) : '', W - 44, y + 26, 16, t.dim, { align: 'right', literal: true });
                     });
                 }
@@ -171,8 +172,8 @@ mgu.run({
                 const left = C.leftText(best.r, settings.get('units')).split('; ')[0];
                 const tone = best.r.due ? 'crit' : best.r.soon ? 'warn' : 'ok';
                 const m = /^([\d,]+ (?:mi|km|months|days)) (left|over)$/.exec(left);
-                return { label: best.it.name, value: m ? m[1] : left, sub: m ? (m[2] === 'over' ? 'overdue' : 'left') : '', bar: best.r.frac, tone,
-                    small: [best.it.name, left] };
+                return { label: best.it.name, value: m ? m[1] : serviceIntervalText(left), sub: m ? serviceIntervalText(m[2] === 'over' ? 'overdue' : 'left') : '', bar: best.r.frac, tone,
+                    small: [best.it.name, serviceIntervalText(left)] };
             });
             log.info('started ' + VERSION + ' (odometer last seen ' + data.odo + ' km)');
         } catch (e) {

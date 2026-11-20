@@ -478,7 +478,7 @@ mgu.run({
                 const lyr = lyrics.get({ title: cur.title, artist: cur.artist, album: cur.album, duration: cur.duration });
                 let line = '';
                 if (lyr.state === 'synced') { const i = LyricsLib.lineAt(lyr.lines, position() + LEAD_MS); line = i >= 0 ? lyr.lines[i].text : ''; }
-                return { label: 'Now playing', value: cur.title, sub: line || cur.artist, sub2: line ? cur.artist : '',
+                return { label: 'Now playing', literal: ['value', 'sub', 'sub2', 'small'], value: cur.title, sub: line || cur.artist, sub2: line ? cur.artist : '',
                     bar: cur.duration ? (position() - offset()) / cur.duration : null, small: [cur.title, line || cur.artist] };
             }, { fps: 1 });
 

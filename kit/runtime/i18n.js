@@ -20,7 +20,10 @@ function t(value) {
     const key = s.trim();
     if (localizedValues.has(key)) return s;
     let out;
-    if (Object.prototype.hasOwnProperty.call(dict, key)) {
+    const misfireCount = language === 'zh-CN' ? /^(\d+) misfires?$/.exec(key) : null;
+    if (misfireCount) {
+        out = misfireCount[1] + ' 次失火';
+    } else if (Object.prototype.hasOwnProperty.call(dict, key)) {
         out = s.slice(0, s.indexOf(key)) + dict[key] + s.slice(s.indexOf(key) + key.length);
     } else if (Object.prototype.hasOwnProperty.call(folded, key.toLowerCase())) {
         out = s.slice(0, s.indexOf(key)) + folded[key.toLowerCase()] + s.slice(s.indexOf(key) + key.length);

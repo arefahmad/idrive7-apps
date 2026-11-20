@@ -20,6 +20,7 @@
  * Node 8: no ?., ??, object spread or optional catch binding.
  */
 const { Canvas, withAlpha } = require('./canvas');
+const { t: translate } = require('./i18n');
 
 const WW = 384, WH = 256;
 const SAFE = [0.09, 0.1];
@@ -31,7 +32,17 @@ function fit(cv, s, size, w, opt) {
     return s + '...';
 }
 
+function localized(d) {
+    const copy = Object.assign({}, d), literal = d.literal || [];
+    ['label', 'value', 'sub', 'sub2'].forEach((key) => {
+        if (d[key] !== undefined && literal.indexOf(key) < 0) copy[key] = translate(d[key]);
+    });
+    if (Array.isArray(d.small) && literal.indexOf('small') < 0) copy.small = d.small.map(translate);
+    return copy;
+}
+
 function draw(cv, d, t) {
+    d = localized(d);
     const x0 = Math.round(WW * SAFE[0]), y0 = Math.round(WH * SAFE[1]), w = WW - 2 * x0;
     const tone = d.tone === 'crit' ? (t.crit || '#ff3b30') : d.tone === 'warn' ? (t.warn || '#ffb31a') : (t.accent2 || t.accent || '#2fa8e8');
     cv.clear(t.bg || '#050506');
@@ -66,11 +77,12 @@ function start(ctx, content, opts) {
         const v = JSON.stringify(value);
         if (prev[name] === v) return;
         prev[name] = v;
-        ctx.widget.set(inst.spawnId, name, value, 'Text');
+        ctx.widget.set(inst.spawnId, name, value, 'Text', true);
     };
     ctx.widget.loop((opts && opts.fps) || 0.2, (inst) => {
         let d;
         try { d = content() || {}; } catch (e) { ctx.log.warn('widget content: ' + e.message); d = { label: ctx.spec.title, value: '' }; }
+        d = localized(d);
         if (inst && !inst.big) {
             // the small size shows no pictures: two text lines (cells of the Drive Recorder widget layout)
             const s = d.small || [d.value, d.sub];
@@ -99,4 +111,4 @@ const SPEC = {
     },
 };
 
-module.exports = { start, draw, SPEC, WW, WH };
+module.exports = { start, draw, localized, SPEC, WW, WH };
