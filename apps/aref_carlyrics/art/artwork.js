@@ -214,6 +214,9 @@ class Artwork {
         // the car's own copy of the phone's artwork (offline; the file can come a moment after the metadata)
         const car = await this._fromCar(track, f);
         if (car) return car;
+        // the homelab's pack keeps covers by title and artist only (no album): that file too
+        const fAlt = this._file(norm(track.title) + '|' + norm(track.artist) + '|');
+        if (f && !fs.existsSync(f) && fAlt && fs.existsSync(fAlt)) { try { const v = this.fromJpeg(fs.readFileSync(fAlt)); v.src = 'disk'; this.log.info('artwork: from the pack in ' + (Date.now() - t0) + ' ms'); return v; } catch (e) { /* unreadable */ } }
         if (f) { try { const buf = fs.readFileSync(f); const v = this.fromJpeg(buf); v.src = 'disk'; this.log.info('artwork: from disk in ' + (Date.now() - t0) + ' ms'); return v; } catch (e) { /* not cached */ } }
         const term = [LyricsLib.baseTitle(track.title), String(track.artist || '').split(/,|&/)[0]].join(' ');
         const q = querystring.stringify({ term: term, media: 'music', entity: 'song', limit: 10 });

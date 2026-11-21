@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.5.7';
+const VERSION = '0.6.0';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -110,7 +110,7 @@ mgu.run({
         try {
             const net = http.client(ctx.dataDir);
             const request = (m, h, p, hd) => net.request(m, h, p, hd);
-            const lyrics = new LyricsLib.Lyrics(request, log, 'CarLyrics/' + VERSION + ' (iDrive 7 head-unit app; ' + HOMEPAGE + ')');
+            const lyrics = new LyricsLib.Lyrics(request, log, 'CarLyrics/' + VERSION + ' (iDrive 7 head-unit app; ' + HOMEPAGE + ')', path.join(ctx.dataDir, 'lyrics'));   // kept on disk: offline next time
             const artwork = new ART.Artwork(request, log, undefined, { dir: path.join(ctx.dataDir, 'covers') });   // covers kept on disk: replays show at once
             const np = new NP.NowPlaying(ctx.signals, log, IFACES);
             // Inter (OFL), the open look-alike of Apple's SF Pro: data/fonts/, baked by tools/bake_fonts.py
@@ -139,7 +139,7 @@ mgu.run({
                 if (!cur || cur.key !== key) {
                     cur = { key: key, title: t.title, artist: t.artist, album: t.album, duration: t.duration || 0, playing: true };
                     clk = null; startAt = Date.now();
-                    log.info('track: "' + t.title + '" by "' + t.artist + '" (' + Math.round((t.duration || 0) / 1000) + ' s) from ' + t.from);
+                    log.info('track: "' + t.title + '" by "' + t.artist + '" on "' + (t.album || '') + '" (' + Math.round((t.duration || 0) / 1000) + ' s) from ' + t.from);
                 }
                 if (t.duration) cur.duration = t.duration;
                 if (t.album) cur.album = t.album;

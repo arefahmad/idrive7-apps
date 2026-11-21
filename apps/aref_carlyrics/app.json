@@ -2,7 +2,7 @@
   "id": "aref_carlyrics",
   "title": "Car Lyrics",
   "description": "Synced lyrics for whatever the car plays: Apple Music over CarPlay, Bluetooth or USB, no Spotify needed. A full-screen page drawn like Apple Music's: the album art blurred behind, the cover and a progress line on the left, and the lyrics gliding line by line on the right, timed to the song from the car's own clock. Lyrics from LRCLIB, artwork from Apple's iTunes search. A Probe tab shows what the car reports. Read-only toward the car. Needs internet through the Store's uplink.",
-  "version": "0.5.7",
+  "version": "0.6.0",
   "vendor": "aref",
   "loggingId": "OAR1",
   "internet": true,
@@ -249,6 +249,12 @@
     {
       "key": "hide_back_arrow",
       "label": "Hide BMW's < tab on the left (the backdrop reaches the edge)",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "hide_status_bar",
+      "label": "Full screen: hide BMW's top bar (clock, signal, profile)",
       "type": "bool",
       "default": true
     }
