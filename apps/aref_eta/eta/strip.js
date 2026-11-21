@@ -26,6 +26,9 @@ const pack = require('./kit/pack');
 
 const LOOK = require('./look');
 const ISL = require('./island');
+// BMW's pop-up slots: the cluster's 0x201 / 0x202, and the HUD's 0x321 (the same pop-up, shown there too)
+const POPUP_SLOTS = ['201', '202', '321'];
+const POPUP_POLL_MS = 700, POPUP_HOLD_MS = 1300;
 const DESIGN = require('./design');
 const SLOT = require('./slot');
 const IW = LOOK.IW, IH = LOOK.IH;         // the image; the rect on the cluster scales it (bilinear)
@@ -145,6 +148,12 @@ class Strip {
                 if (s !== this.state.target) this.note('cluster: panel ' + s);
                 this.state.target = s;
             });
+            // BMW's own pop-ups (heated steering, seat heating, volume...): not Check Control messages, so only the
+            // renderer's slot table shows them. While one is up, the ETA and the second slot step aside.
+            cr.on('status', (text) => { try { this._onStatus(String(text || '')); } catch (e) { /* next */ } });
+            this.popTimer = setInterval(() => {
+                if (this.cr && this.cr.status && (this.shown || (this.slot && this.slot.shown) || Date.now() < (this.hideUntil || 0))) { try { this.cr.status(); } catch (e) { /* next */ } }
+            }, POPUP_POLL_MS);
             cr.on('refused', (op, ref, reason) => { this.note('cluster: refused ' + op + ': ' + reason); this.state.reason = 'refused: ' + reason; });
             cr.on('error', (e) => { this.state.client = 'error: ' + (e && e.message || e); });
             const r = this.rect();
@@ -169,7 +178,23 @@ class Strip {
     /** Nothing on the cluster and nothing coming: the 1 s route check can skip. */
     idle() { return !this.shown && !this.pending && !(this.isl && this.isl.active) && Date.now() >= (this.previewUntil || 0); }
 
-    hideFor(ms) { this.hideUntil = Date.now() + ms; }
+    /** The status text's slot rows: a pop-up slot with content shown (map 1) hides the ETA a little longer. */
+    _onStatus(text) {
+        let pop = null;
+        text.split('\n').forEach((line) => {
+            const m = /slot 0x([0-9a-f]+) status \d+: (.*)/i.exec(line);
+            if (!m || POPUP_SLOTS.indexOf(m[1].toLowerCase()) < 0) return;
+            const re = /0x([0-9a-f]+) class (\d+) map (\d)/gi;
+            let r;
+            while ((r = re.exec(m[2]))) if (r[1] !== '0' && r[3] === '1') pop = pop || ('0x' + m[1] + ' ' + '0x' + r[1]);
+        });
+        if (pop) {
+            if (!(Date.now() < (this.hideUntil || 0))) this.note('BMW pop-up in slot ' + pop + ': ETA and second slot step aside');
+            this.hideFor(POPUP_HOLD_MS);
+        }
+    }
+
+    hideFor(ms) { this.hideUntil = Math.max(this.hideUntil || 0, Date.now() + ms); }   // the longer of two hides wins
     /** Apple or BMW type, for the ETA and the second slot (the same fonts object, changed in place). */
     setFont(name) {
         if (name === 'bmw' && this.families && !this.families.bmw && this.fontSrc) {
