@@ -26,9 +26,12 @@ const pack = require('./kit/pack');
 
 const LOOK = require('./look');
 const ISL = require('./island');
-// BMW's pop-up slots: the cluster's 0x201 / 0x202, and the HUD's 0x321 (the same pop-up, shown there too)
-const POPUP_SLOTS = ['201', '202', '321'];
-const POPUP_POLL_MS = 700, POPUP_HOLD_MS = 1300, POPUP_MAX_MS = 12000;   // longer than POPUP_MAX_MS: not a pop-up
+// BMW's pop-up slots (cluster-render's README / conf, robertnisipeanu/idrive-apps): the cluster's 0x201 / 0x202 and the
+// HUD's 0x321 (calls, status pop-ups such as heated steering: content 0x1000600) and 0x322 (media and list pop-ups,
+// 0x1000251; pushed to the cluster as 0x1000351 in 0x202). Route guidance in them never counts: the service's own list.
+const POPUP_SLOTS = ['201', '202', '321', '322'];
+const GUIDANCE = ['1000200', '1000201', '1000210', '1000211', '1000300', '1000301', '1000310', '1000311', '1000312', '1000313', '1000314', '1000360'];
+const POPUP_POLL_MS = 700, POPUP_HOLD_MS = 1300, POPUP_MAX_MS = 60000;   // a safety net: something up longer isn't a pop-up
 const DESIGN = require('./design');
 const SLOT = require('./slot');
 const IW = LOOK.IW, IH = LOOK.IH;         // the image; the rect on the cluster scales it (bilinear)
@@ -193,7 +196,7 @@ class Strip {
             while ((r = re.exec(m[2]))) {
                 if (r[1] === '0' || r[3] !== '1') continue;
                 if (!/^10004f[018]$/.test(r[1]) && slot !== '250') sig.push(slot + ':' + r[1]);
-                if (POPUP_SLOTS.indexOf(slot) < 0) continue;
+                if (POPUP_SLOTS.indexOf(slot) < 0 || GUIDANCE.indexOf(r[1].replace(/^0+/, '')) >= 0) continue;
                 const k = slot + ':' + r[1];
                 seen[k] = true;
                 if (!this.popSince[k]) this.popSince[k] = now;
