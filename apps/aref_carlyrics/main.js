@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.6.4';
+const VERSION = '0.6.5';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -287,13 +287,16 @@ mgu.run({
                     // two blurred layers of the cover drifting past each other, slowly, as Apple Music's background flows
                     // Settings > Background motion: still (default) or a slow drift, as Apple Music's
                     const d = settings.get('bg_motion') === 'drift' && cur && cur.playing ? now / 1000 : 0;
+                    // drift: each layer wanders ~14 % of the screen and breathes (zooms 6 % in and out) over 30-50 s, the
+                    // two at different speeds, so the colours visibly flow (Nov 21: 7 % over ~1 min read as still)
                     const layer = (id, sc, fx, fy, ph) => {
-                        const bw = W * sc, bh = (fullH + 2 * OVER) * sc;   // tall enough to cover past the page (full screen)
-                        cv.image(id, (W - bw) / 2 + Math.sin(d / fx + ph) * 0.07 * W, (fullH - bh) / 2 + Math.cos(d / fy + ph) * 0.07 * fullH, bw, bh);
+                        const z = sc * (1 + 0.06 * Math.sin(d / (fx * 1.3) + ph));
+                        const bw = W * z, bh = (fullH + 2 * OVER) * z;   // tall enough to cover past the page (full screen)
+                        cv.image(id, (W - bw) / 2 + Math.sin(d / fx + ph) * 0.14 * W, (fullH - bh) / 2 + Math.cos(d / fy + ph) * 0.12 * fullH, bw, bh);
                     };
-                    layer(BG_ID, 1.25, 9, 11, 0);
-                    cv.alpha(0.5);
-                    layer(BG2_ID, 1.45, 13, 7, 2);
+                    layer(BG_ID, 1.4, 5, 6.5, 0);
+                    cv.alpha(0.55);
+                    layer(BG2_ID, 1.6, 7.5, 4.5, 2);
                     cv.alpha(1);
                 } else {
                     cv.gradientRect(x0, 0, W - x0, fullH, [[0, P.top], [1, P.bottom]]);
