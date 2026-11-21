@@ -802,6 +802,8 @@ class Display {
             if (btns0.length && this.barH()) G.menuBar(c, t, 0, by0, W, FULL.barH, btns0, btns0.findIndex((b) => b.id === this.focused), 'slim', -1);
             const arrow0 = this.screen.backArrow !== false && !(this.settings && this.settings.get('hide_back_arrow'));
             if (hx0 > 0 && arrow0) c.clip(0, HMI.back.y - pl.y, hx0, HMI.back.h).clear(0).noclip();
+            // peekStatus(): the HMI's title strip shows through for a moment (its volume bar, say), the page untouched
+            if (Date.now() < (this.peekUntil || 0)) c.clip(0, 0, W, FULL.headH - pl.y).clear(0).noclip();
             r.xf(1, 0, 0);
             this._bleed(r, 0, H);
             r.append(c).xf();
@@ -933,6 +935,13 @@ class Display {
      * the HMI's title strip (clock, signal, profile): the page reaches the screen's top. The HMI still gets touches
      * on its Home button and back arrow column (they're just not drawn); the controller's back works too.
      */
+    /** Bare full screen: let the HMI's title strip show for ms (BMW's volume bar is drawn there), no relayout. */
+    peekStatus(ms) {
+        this.peekUntil = Date.now() + (ms || 2500);
+        this.lastWords = null;
+        clearTimeout(this._peekT);
+        this._peekT = setTimeout(() => { this.lastWords = null; }, (ms || 2500) + 50);
+    }
     _bare() { return !!(this.own() && ((this.screen && this.screen.statusBar === false) || (this.settings && this.settings.get('hide_status_bar')))); }
 
     /**

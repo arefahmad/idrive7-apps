@@ -28,7 +28,7 @@ const LOOK = require('./look');
 const ISL = require('./island');
 // BMW's pop-up slots: the cluster's 0x201 / 0x202, and the HUD's 0x321 (the same pop-up, shown there too)
 const POPUP_SLOTS = ['201', '202', '321'];
-const POPUP_POLL_MS = 700, POPUP_HOLD_MS = 1300;
+const POPUP_POLL_MS = 700, POPUP_HOLD_MS = 1300, POPUP_MAX_MS = 12000;   // longer than POPUP_MAX_MS: not a pop-up
 const DESIGN = require('./design');
 const SLOT = require('./slot');
 const IW = LOOK.IW, IH = LOOK.IH;         // the image; the rect on the cluster scales it (bilinear)
@@ -180,16 +180,33 @@ class Strip {
 
     /** The status text's slot rows: a pop-up slot with content shown (map 1) hides the ETA a little longer. */
     _onStatus(text) {
+        const now = Date.now(), seen = {};
+        if (!this.popSince || now - (this.lastStatus || 0) > 3000) this.popSince = {};   // polls paused: start fresh
+        this.lastStatus = now;
         let pop = null;
+        const sig = [];
         text.split('\n').forEach((line) => {
             const m = /slot 0x([0-9a-f]+) status \d+: (.*)/i.exec(line);
-            if (!m || POPUP_SLOTS.indexOf(m[1].toLowerCase()) < 0) return;
-            const re = /0x([0-9a-f]+) class (\d+) map (\d)/gi;
+            if (!m) return;
+            const slot = m[1].toLowerCase(), re = /0x([0-9a-f]+) class (\d+) map (\d)/gi;
             let r;
-            while ((r = re.exec(m[2]))) if (r[1] !== '0' && r[3] === '1') pop = pop || ('0x' + m[1] + ' ' + '0x' + r[1]);
+            while ((r = re.exec(m[2]))) {
+                if (r[1] === '0' || r[3] !== '1') continue;
+                if (!/^10004f[018]$/.test(r[1]) && slot !== '250') sig.push(slot + ':' + r[1]);
+                if (POPUP_SLOTS.indexOf(slot) < 0) continue;
+                const k = slot + ':' + r[1];
+                seen[k] = true;
+                if (!this.popSince[k]) this.popSince[k] = now;
+                // a pop-up is short; a slot busy longer (the HUD's turn arrows through a whole route) isn't one
+                if (now - this.popSince[k] < POPUP_MAX_MS) pop = pop || ('0x' + slot + ' 0x' + r[1]);
+            }
         });
+        Object.keys(this.popSince).forEach((k) => { if (!seen[k]) delete this.popSince[k]; });
+        // every change of what BMW shows in its own slots, for finding a pop-up that isn't caught
+        const s2 = sig.sort().join(' ');
+        if (s2 !== this.slotSig) { this.slotSig = s2; this.note('slots: ' + (s2 || 'none of BMW\'s')); }
         if (pop) {
-            if (!(Date.now() < (this.hideUntil || 0))) this.note('BMW pop-up in slot ' + pop + ': ETA and second slot step aside');
+            if (!(now < (this.hideUntil || 0))) this.note('BMW pop-up in slot ' + pop + ': ETA and second slot step aside');
             this.hideFor(POPUP_HOLD_MS);
         }
     }
