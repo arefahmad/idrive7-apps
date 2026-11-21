@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.20.1';
+const VERSION = '1.21.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -205,7 +205,8 @@ mgu.run({
                 const EDGE = { sharp: 0.015, soft: 0.05, softer: 0.12, fade: 0.25, long: 0.45 };
                 const edge = (k, d) => EDGE[ctx.settings.get('music_edge_' + k)] || EDGE[d];
                 strip.slot.setLook({ top: edge('top', 'soft'), bottom: edge('bottom', 'fade'), left: edge('left', 'soft'), right: edge('right', 'soft'),
-                    opacity: (Number(ctx.settings.get('music_opacity')) || 100) / 100, blur: ({ none: 0, soft: 6, medium: 12, strong: 22 })[ctx.settings.get('music_blur') || 'medium'] || 0 });
+                    opacity: (Number(ctx.settings.get('music_opacity')) || 100) / 100, blur: ({ none: 0, soft: 6, medium: 12, strong: 22 })[ctx.settings.get('music_blur') || 'medium'] || 0,
+                    crop: ctx.settings.get('music_crop') === 'none' ? 1 : 0.9 });   // the art's top-left 90 %: the explicit badge's corner off
                 if (kind === 'music' && !np) {          // started on first use: it subscribes to a lot
                     np = new NP.NowPlaying(ctx.signals, log, NP_IFACES);
                     np.start().catch((e) => log.warn('nowplaying: ' + e.message));

@@ -134,7 +134,7 @@ function draw(c, fonts) {
             for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
                 const dx = Math.min(x, n - 1 - x), dy = Math.min(y, n - 1 - y);
                 if (dx < r && dy < r && Math.hypot(r - dx - 0.5, r - dy - 0.5) > r) continue;
-                const si = ((Math.floor(y * sn / n) * sn) + Math.floor(x * sn / n)) * 4;
+                const k = m.crop || 1, si = ((Math.floor(y * sn * k / n) * sn) + Math.floor(x * sn * k / n)) * 4;   // crop: the art's top-left share (the badge corner off)
                 cv._blend(x0 + x, y0 + y, [src[si], src[si + 1], src[si + 2], 255], 1);
             }
         } else {
@@ -243,7 +243,7 @@ function dist0(s, u, v) {
  * look: { top, bottom, left, right: each side's fade width in box units, opacity 0..1 }: a side over a gauge can
  * fade out instead of moving the whole backdrop.
  */
-const DEF_LOOK = { top: 0.05, bottom: 0.25, left: 0.05, right: 0.05, opacity: 1, blur: 0 };
+const DEF_LOOK = { top: 0.05, bottom: 0.25, left: 0.05, right: 0.05, opacity: 1, blur: 0, crop: 1 };
 /**
  * The shape's alpha (0..255 per backdrop pixel), made once per shape and look, not per song. Each side has its
  * own edge: look.top / bottom / left / right are fade widths in box units (0.015 sharp .. 0.45 a long gradient).
@@ -269,7 +269,7 @@ const widthFor = (nx, ny, L) => {
     return (r * r * L.right + l * l * L.left + b * b * L.bottom + t * t * L.top) / Math.max(1e-6, r * r + l * l + b * b + t * t);
 };
 function backdropMask(shape, L) {
-    const key = shape + JSON.stringify(Object.assign({}, L, { blur: 0 }));   // the mask doesn't depend on the blur
+    const key = shape + JSON.stringify(Object.assign({}, L, { blur: 0, crop: 1 }));   // the mask doesn't depend on the blur or crop
     if (key === maskKey) return maskA;
     const A = new Uint8Array(BW * BH);
     const s0 = SHAPES[shape] || SHAPES.bmw, safe = s0 !== SHAPES.bmw;
@@ -328,11 +328,11 @@ function drawBackdrop(px, n, shape, look) {
     px = blurCover(px, n, Math.round(((look && look.blur) || 0) * n / 300));
     const out = Buffer.alloc(BW * BH * 4);
     for (let y = 0; y < BH; y++) {
-        const sy = Math.floor(y * n / BH) * n;
+        const k = (look && look.crop) || 1, sy = Math.floor(y * n * k / BH) * n;   // crop as the small cover's
         for (let x = 0; x < BW; x++) {
             const a = A[y * BW + x];
             if (!a) continue;
-            const si = (sy + Math.floor(x * n / BW)) * 4, di = (y * BW + x) * 4;
+            const si = (sy + Math.floor(x * n * k / BW)) * 4, di = (y * BW + x) * 4;
             out[di] = px[si] * 0.6; out[di + 1] = px[si + 1] * 0.6; out[di + 2] = px[si + 2] * 0.6; out[di + 3] = a;
         }
     }
@@ -409,7 +409,7 @@ class Slot {
         try {
             const show = !!(want && c);
             if (show) {
-                if (c.music) { c.music.size = this.music.size; c.music.back = !!this.music.textBack; c.music.barBack = !!this.music.back; c.music.barW = this.music.bar; c.music.barTime = this.music.time; }
+                if (c.music) { c.music.crop = this.look.crop || 1; c.music.size = this.music.size; c.music.back = !!this.music.textBack; c.music.barBack = !!this.music.back; c.music.barW = this.music.bar; c.music.barTime = this.music.time; }
                 const key = JSON.stringify(c, (k, v) => (k === 'cover' || k === 'bg' ? (v ? k : null) : k === 'pos' ? undefined : v));
                 const now = Date.now();
                 if (key !== this.key && now - this.at >= MIN_MS) {
