@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.6.0';
+const VERSION = '0.6.1';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -277,6 +277,7 @@ mgu.run({
                 return edgeCache.c;
             }
 
+            const OVER = 160;          // logical px drawn past the page's top and bottom edges
             function backdrop(cv, a, now, P, fullH, x0) {
                 x0 = x0 || 0;      // < 0: the copy for BMW's back column (bgEdge), so its plain fills start there too
                 if (a) {
@@ -284,7 +285,7 @@ mgu.run({
                     // Settings > Background motion: still (default) or a slow drift, as Apple Music's
                     const d = settings.get('bg_motion') === 'drift' && cur && cur.playing ? now / 1000 : 0;
                     const layer = (id, sc, fx, fy, ph) => {
-                        const bw = W * sc, bh = fullH * sc;
+                        const bw = W * sc, bh = (fullH + 2 * OVER) * sc;   // tall enough to cover past the page (full screen)
                         cv.image(id, (W - bw) / 2 + Math.sin(d / fx + ph) * 0.07 * W, (fullH - bh) / 2 + Math.cos(d / fy + ph) * 0.07 * fullH, bw, bh);
                     };
                     layer(BG_ID, 1.25, 9, 11, 0);
@@ -293,11 +294,15 @@ mgu.run({
                     cv.alpha(1);
                 } else {
                     cv.gradientRect(x0, 0, W - x0, fullH, [[0, P.top], [1, P.bottom]]);
+                    cv.fillRect(x0, -OVER, W - x0, OVER, P.top); cv.fillRect(x0, fullH, W - x0, OVER, P.bottom);
                     for (let r = 340; r > 20; r -= 16) cv.circle(300, 120, r, G.withAlpha(P.glow, 0.016));
                     for (let r = 300; r > 20; r -= 16) cv.circle(1300, fullH - 60, r, G.withAlpha(P.glow, 0.012));
                 }
                 // a little darker at the top and the bottom, as glass over the artwork
                 cv.gradientRect(x0, 0, W - x0, fullH, [[0, G.withAlpha('#000000', 0.3)], [0.45, G.withAlpha('#000000', 0)], [1, G.withAlpha('#000000', 0.4)]]);
+                // the screen reaches past the page at the top and bottom (full screen): the same dimming there, so those
+                // rows match the page instead of showing the art undimmed
+                cv.fillRect(x0, -OVER, W - x0, OVER, G.withAlpha('#000000', 0.3)); cv.fillRect(x0, fullH, W - x0, OVER, G.withAlpha('#000000', 0.4));
             }
 
             function coverColumn(cv, Q, a, P, now) {
