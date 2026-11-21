@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.22.0';
+const VERSION = '1.23.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -185,16 +185,18 @@ mgu.run({
             let np = null, artwork = null;
             const slotKind = () => ctx.settings.get('second_slot') || 'off';
             const covers = {};          // artwork ver -> { px, n } (150 px)
+            let lastCover = null;
             const coverFor = (t) => {
                 if (!artwork || !t || !t.title) return null;
                 const e = artwork.get({ title: t.title, artist: t.artist, album: t.album, cover: t.cover });   // cover: the car's own file
-                if (e.state !== 'ready') return null;
+                // still loading: the last cover stays (with its backdrop), so cover and backdrop always match; no cover: none
+                if (e.state !== 'ready') return e.state === 'loading' ? lastCover : (lastCover = null);
                 if (!covers[e.ver]) {
                     Object.keys(covers).forEach((k) => delete covers[k]);
                     // the small cover, and a 300 px one for the backdrop (the same object while the song plays)
                     covers[e.ver] = { px: ART.squareResample(e.cover, e.n, e.n, 150, 0).px, n: 150, big: { px: e.cover, n: e.n } };
                 }
-                return covers[e.ver];
+                return (lastCover = covers[e.ver]);
             };
             setInterval(guard('slot', () => {
                 if (!strip.slot) return;
@@ -211,7 +213,7 @@ mgu.run({
                     np = new NP.NowPlaying(ctx.signals, log, NP_IFACES);
                     np.start().catch((e) => log.warn('nowplaying: ' + e.message));
                     const net = http.client(ctx.dataDir);
-                    artwork = new ART.Artwork((m, h, p, hd) => net.request(m, h, p, hd), log, undefined, { px: 300, blur: false, dir: path.join(ctx.dataDir, 'covers') });
+                    artwork = new ART.Artwork((m, h, p, hd) => net.request(m, h, p, hd), log, undefined, { px: 300, blur: false, cache: 12, dir: path.join(ctx.dataDir, 'covers') });
                 }
                 const t = kind === 'music' && np ? np.track() : null;
                 const cov = coverFor(t), c = SLOT.content(kind, car.data(), Date.now(), t, cov);

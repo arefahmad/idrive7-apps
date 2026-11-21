@@ -30,10 +30,10 @@ const BLUR = 18;              // the backdrop's box-blur radius (px of BG_W), th
 const DIM = 0.55;             // the backdrop's brightness (Apple Music: the blur under a 50 % black layer)
 const SATURATE = 1.5;         // ... and its colour (Apple Music: saturate(1.5))
 const RETRY_MS = 60000;       // a failed lookup is tried again after this long
-const CACHE = 4;              // covers kept (a song played again, skipping back)
+const CACHE = 6;              // covers kept decoded by default (a song played again, skipping back: at once); opts.cache
 const SETTLE_MS = 300;        // skipping fast: a song is looked up once it has been current this long ...
 const SKIP_MS = 4000;
-const CAR_WAIT_MS = 2500;      // a new song: give the car this long to name its own cover before asking iTunes         // ... unless the song before it played this long (not skipping): then at once
+const CAR_WAIT_MS = 1200;      // a new song: give the car this long to name its own cover before asking iTunes         // ... unless the song before it played this long (not skipping): then at once
 const MISSING_MS = 600000;    // no match found: asked again after 10 min (a skip can send a half-changed title)
 const DISK_MAX = 300;         // covers kept on disk (opts.dir): a song played again shows at once, even offline
 
@@ -161,7 +161,7 @@ class Artwork {
         this.request = request;
         this.log = log;
         this.decode = decode || require('./jpeg_decoder');
-        this.opts = Object.assign({ px: ART_PX, blur: true, dir: null }, opts);
+        this.opts = Object.assign({ px: ART_PX, blur: true, dir: null, cache: CACHE }, opts);
         this.cache = new Map();      // key -> entry
         this.busy = new Set();
         this.want = { k: null, since: 0 };
@@ -204,7 +204,7 @@ class Artwork {
         if (v.state === 'ready') v.ver = ++this.ver;
         this.cache.delete(k);
         this.cache.set(k, v);
-        while (this.cache.size > CACHE) this.cache.delete(this.cache.keys().next().value);
+        while (this.cache.size > this.opts.cache) this.cache.delete(this.cache.keys().next().value);
     }
 
     _file(k) { return this.opts.dir ? require('path').join(this.opts.dir, require('crypto').createHash('sha1').update('v2|' + k).digest('hex').slice(0, 16) + '.jpg') : null; }

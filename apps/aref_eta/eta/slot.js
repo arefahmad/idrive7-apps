@@ -445,10 +445,9 @@ class Slot {
         (this.bgTimers || []).forEach(clearTimeout);
         this.bgTimers = [];
         const at = (ms, fn) => this.bgTimers.push(setTimeout(() => { try { fn(); } catch (e) { /* next */ } }, ms));
-        if (first) { this.cr.pixels(this.bg, null, px); this.cr.set(this.bg, { opacity: 1 }); return; }
-        [[0, 0.75], [60, 0.45], [120, 0.15]].forEach((x) => at(x[0], () => this.cr.set(this.bg, { opacity: x[1] })));
-        at(170, () => this.cr.pixels(this.bg, null, px));
-        [[260, 0.35], [330, 0.65], [400, 0.9], [460, 1]].forEach((x) => at(x[0], () => this.cr.set(this.bg, { opacity: x[1] })));
+        // the cover and its backdrop change together, in the same frame (Nov 21: they must always match)
+        this.cr.pixels(this.bg, null, px);
+        if (first) this.cr.set(this.bg, { opacity: 1 });
     }
 
     move(place, fit) {
