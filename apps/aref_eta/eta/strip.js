@@ -209,7 +209,7 @@ class Strip {
         const s2 = sig.sort().join(' ');
         if (s2 !== this.slotSig) { this.slotSig = s2; this.note('slots: ' + (s2 || 'none of BMW\'s')); }
         if (pop) {
-            if (!(now < (this.hideUntil || 0))) this.note('BMW pop-up in slot ' + pop + ': ETA and second slot step aside');
+            if (!(now < (this.hideUntil || 0))) this.note('BMW pop-up in slot ' + pop + ': the ETA steps aside');
             this.hideFor(POPUP_HOLD_MS);
         }
     }
