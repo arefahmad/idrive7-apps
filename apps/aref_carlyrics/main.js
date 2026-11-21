@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.6.6';
+const VERSION = '0.7.0';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -387,9 +387,52 @@ mgu.run({
                     a *= Math.max(0, edge);
                     if (a <= 0.01) continue;
                     if (!b.rows.length) { dots(cv, Q.LX, y, j === i ? 1 : a, lines, j, p); continue; }
+                    if (j === i && i >= 0 && settings.get('word_highlight') !== false) { sungWords(cv, b, lines, i, p, Q.LX, y, a, [Q.LX - 20, top, W - (Q.LX - 20), bottom - top]); continue; }
                     b.rows.forEach((row, k) => soft(cv, row, Q.LX, y + k * LYR.lh + Math.round(LYR.size * 0.8), LYR.size, a, blur));
                 }
                 cv.noclip();
+            }
+            /**
+             * Apple Music's word-by-word light on the line being sung: words sung so far full white, the rest dimmed, the
+             * word being sung lit left to right. LRCLIB times lines, not words, so each word's moment is estimated from the
+             * line's start and its length (about 13 letters a second, ending before the next line starts).
+             */
+            const WORD_DIM = 0.42, CHAR_MS = 75, LINE_MIN_MS = 500;
+            let wordLay = { key: null, rows: null };
+            function sungWords(cv, b, lines, i, p, x0, y, a, clip) {
+                const o = { font: F_BOLD, literal: true }, size = LYR.size;
+                const key = i + '|' + size + '|' + b.rows.join('/');
+                if (wordLay.key !== key) {
+                    // each word's x and its letters' place in the line (measured once per line)
+                    let c = 0;
+                    const sp = cv.textWidth(' ', size, o);
+                    wordLay = { key: key, chars: 0, rows: b.rows.map((row) => {
+                        let x = 0;
+                        return row.split(' ').filter(Boolean).map((w) => {
+                            const ww = cv.textWidth(w, size, o), out = { w: w, x: x, width: ww, c0: c, c1: c + w.length };
+                            x += ww + sp; c += w.length + 1;
+                            return out;
+                        });
+                    }) };
+                    wordLay.chars = c;
+                }
+                const t0 = lines[i].t, next = lines[i + 1] ? lines[i + 1].t : t0 + 8000;
+                const dur = Math.max(LINE_MIN_MS, Math.min(next - t0 - 100, wordLay.chars * CHAR_MS + LINE_MIN_MS));
+                const done = Math.max(0, Math.min(1, (p - t0) / dur)) * wordLay.chars;
+                wordLay.rows.forEach((row, k) => {
+                    const by = y + k * LYR.lh + Math.round(size * 0.8);
+                    row.forEach((wd) => {
+                        const f = Math.max(0, Math.min(1, (done - wd.c0) / Math.max(1, wd.c1 - wd.c0)));
+                        if (f >= 1) { cv.alpha(a); cv.text(wd.w, x0 + wd.x, by, size, WHITE, o); cv.alpha(1); return; }
+                        cv.alpha(a * WORD_DIM); cv.text(wd.w, x0 + wd.x, by, size, WHITE, o); cv.alpha(1);
+                        if (f > 0) {
+                            // the lit part of the word being sung, wiping left to right, inside the lyrics' own clip
+                            cv.clip(x0 + wd.x, by - size, wd.width * f, size * 1.4);
+                            cv.alpha(a * (1 - WORD_DIM)); cv.text(wd.w, x0 + wd.x, by, size, WHITE, o); cv.alpha(1);
+                            cv.noclip(); cv.clip(clip[0], clip[1], clip[2], clip[3]);
+                        }
+                    });
+                });
             }
             /**
              * Text at brightness a, blurred by radius r. The kit draws no blur, so the line is drawn several times,
