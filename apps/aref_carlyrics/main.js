@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.6.5';
+const VERSION = '0.6.6';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -440,6 +440,12 @@ mgu.run({
                 // one clock for the frame in FRAME_MS steps: a frame like the last one isn't sent again
                 const now = Math.floor(Date.now() / FRAME_MS) * FRAME_MS;
                 const cv = ctx.canvas(W, H), A0 = FS.area(cv), fullH = H + (cv.extra || 0);
+                if (!!A0.own !== ownNow) {
+                    ownNow = !!A0.own;
+                    // back to full screen (after Settings, a pop-up, a renderer reconnect): BMW's bar hidden again
+                    if (ownNow && ctx.display && ctx.display._hmiBar) { ctx.display.hmiBarHidden = null; try { ctx.display._hmiBar(); } catch (e) { /* older kit */ } }
+                    else if (!ownNow) { shownKey = ''; showButtons(true); }
+                }
                 // in the HMI's own frame BMW draws its side-panel tab (<) over the left edge: content starts right of
                 // it, and the edge is shaded so the tab sits on a band of its own (Nov 18 photo)
                 const SIDE = A0.own ? 0 : 72, A = Object.assign({}, A0, { x: A0.x + SIDE, w: A0.w - SIDE });
@@ -502,7 +508,9 @@ mgu.run({
             const PROBE_BTNS = ['BTN_PAGE', 'BTN_MORE', 'BTN_SAVE'];
             // the bar's buttons (software renderer only: where the kit runs the screen they are hidden anyway)
             let shownKey = '';
+            let ownNow = false;       // the kit runs the screen (full screen): BMW's bar is the kit's to hide, not ours
             const showButtons = (force) => {
+                if (ownNow) return;
                 const key = probe + '|' + !!clk;
                 if (key === shownKey && !force) return;
                 shownKey = key;
@@ -601,6 +609,8 @@ mgu.run({
             if (ui.onVisible) ui.onVisible(guard('visible', (name, v) => {
                 if (name !== 'MAIN') return;
                 if (!v) { if (!idleTimer && !idle) idleTimer = setTimeout(goIdle, IDLE_MS); return; }
+                // back on screen (from Settings, another app): BMW may have put its bar back; in full screen, hide it again
+                if (ownNow && ctx.display && ctx.display._hmiBar) { ctx.display.hmiBarHidden = null; try { ctx.display._hmiBar(); } catch (e) { /* older kit */ } }
                 if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
                 if (idle) {
                     idle = false;
