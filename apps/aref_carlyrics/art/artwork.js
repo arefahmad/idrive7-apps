@@ -178,6 +178,16 @@ class Artwork {
         // offline, iTunes failed: once the car names its own cover file, try again at once
         const again = e && (e.state === 'error' || e.state === 'missing') && track.cover && e.cover0 !== track.cover;
         if (track.cover) this.sawCover = true;
+        // the car rewrote its file after we read it (we caught the last song's picture): read it again
+        if (e && e.state === 'ready' && e.src === 'car' && track.cover === e.carPath && now - (e.checkedAt || 0) > 1000 && !this.busy.has(k + '#car')) {
+            e.checkedAt = now;
+            try {
+                if (require('fs').statSync(track.cover).mtime.getTime() > e.carMtime + 200) {
+                    this.busy.add(k + '#car');
+                    this._fromCar(track, this._file(k)).then((v) => { if (v) this._put(k, v); }, () => {}).then(() => this.busy.delete(k + '#car'));
+                }
+            } catch (x) { /* gone */ }
+        }
         // a cover from iTunes or the disk while the car has its own file: the car's wins (it's what Apple Music shows)
         if (e && e.state === 'ready' && e.src !== 'car' && track.cover && e.carTried !== track.cover && !this.busy.has(k + '#car')) {
             e.carTried = track.cover;
@@ -250,17 +260,22 @@ class Artwork {
     async _fromCar(track, f) {
         const fs = require('fs'), t0 = Date.now();
         if (!(track.cover && /^\/tmp\/mediaramdisk/.test(track.cover) && /\.(jpe?g)$/i.test(track.cover))) return null;
+        // the car reuses a few file names (cover_..._3.jpg): right after a skip the name can still hold the last song's
+        // picture. A file older than this song (its first request, less 1.5 s) isn't this song's: wait for the new one.
+        const since = (this.want && this.want.k === Artwork.key(track) ? this.want.since : Date.now()) - 1500;
         for (let i = 0; i < 8; i++) {
             try {
+                const st = fs.statSync(track.cover);
+                if (st.mtime.getTime() < since) { if (i === 7) this.log.info('artwork: the car\'s file is still the last song\'s'); throw Object.assign(new Error('stale'), { code: 'STALE' }); }
                 const buf = await new Promise((ok, no) => fs.readFile(track.cover, (e, b) => (e ? no(e) : ok(b))));
                 if (buf.length > 100) {
                     const v = this.fromJpeg(buf);
-                    v.src = 'car';
+                    v.src = 'car'; v.carPath = track.cover; v.carMtime = st.mtime.getTime();
                     if (f) this._save(f, buf);
                     this.log.info('artwork: from the car in ' + (Date.now() - t0) + ' ms');
                     return v;
                 }
-            } catch (e) { if (i === 7) this.log.info('artwork: the car\'s file ' + (e.code || e.message)); }
+            } catch (e) { if (i === 7 && e.code !== 'STALE') this.log.info('artwork: the car\'s file ' + (e.code || e.message)); }
             await new Promise((ok) => setTimeout(ok, 300));
         }
         return null;
