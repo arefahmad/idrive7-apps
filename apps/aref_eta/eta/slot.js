@@ -435,7 +435,7 @@ class Slot {
                 this.bgCover = bg;
                 this._bgSwap(drawBackdrop(bg.px, bg.n, this.shape, this.look), first);
             }
-            const bgShow = !!(bg || (music && this.bgCover && this.bgShown));
+            const bgShow = !!bg;      // with its cover only: never another song's backdrop under this song's names
             if (this.bg && bgShow !== this.bgShown) { this.bgShown = bgShow; this.cr.set(this.bg, { visible: bgShow }); }
         } catch (e) { this.note('slot: ' + e.message); }
     }

@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.23.1';
+const VERSION = '1.23.2';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -189,8 +189,8 @@ mgu.run({
             const coverFor = (t) => {
                 if (!artwork || !t || !t.title) return null;
                 const e = artwork.get({ title: t.title, artist: t.artist, album: t.album, cover: t.cover });   // cover: the car's own file
-                // still loading: the last cover stays (with its backdrop), so cover and backdrop always match; no cover: none
-                if (e.state !== 'ready') return e.state === 'loading' ? lastCover : (lastCover = null);
+                // not ready yet: no cover and no backdrop (never the last song's), so the two always match
+                if (e.state !== 'ready') return (lastCover = null);
                 if (!covers[e.ver]) {
                     Object.keys(covers).forEach((k) => delete covers[k]);
                     // the small cover, and a 300 px one for the backdrop (the same object while the song plays)

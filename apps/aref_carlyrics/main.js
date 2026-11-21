@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.6.3';
+const VERSION = '0.6.4';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -168,8 +168,8 @@ mgu.run({
             const artFor = () => {
                 if (!cur) return null;
                 const a = artwork.get({ title: cur.title, artist: cur.artist, album: cur.album, cover: cur.cover });   // cover: the car's own file
-                // still loading: the last art stays, cover and background together, until the new one is ready
-                if (a.state !== 'ready') return a.state === 'loading' && artShown >= 0 ? lastArt : (lastArt = null);
+                // not ready yet: the song's own colours (cover placeholder and background), never the last song's art
+                if (a.state !== 'ready') return (lastArt = null);
                 lastArt = a;
                 if (a.ver !== artShown) {
                     record.setImage(ART_ID, ART.ART_PX, ART.ART_PX, a.cover);

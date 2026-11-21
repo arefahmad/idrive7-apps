@@ -265,9 +265,18 @@ class Artwork {
         const since = (this.want && this.want.k === Artwork.key(track) ? this.want.since : Date.now()) - 1500;
         for (let i = 0; i < 8; i++) {
             try {
-                const st = fs.statSync(track.cover);
+                let file = track.cover, st = null;
+                try { st = fs.statSync(file); } catch (e) {
+                    // the name in the metadata doesn't exist (often: the car writes the picture under another number):
+                    // the newest picture in the same folder written since the song changed
+                    const dir = require('path').dirname(file);
+                    const pick = fs.readdirSync(dir).filter((n) => /\.jpe?g$/i.test(n)).map((n) => ({ f: require('path').join(dir, n), t: fs.statSync(require('path').join(dir, n)).mtime.getTime() }))
+                        .filter((x) => x.t >= since).sort((a, b) => b.t - a.t)[0];
+                    if (!pick) throw e;
+                    file = pick.f; st = fs.statSync(file);
+                }
                 if (st.mtime.getTime() < since) { if (i === 7) this.log.info('artwork: the car\'s file is still the last song\'s'); throw Object.assign(new Error('stale'), { code: 'STALE' }); }
-                const buf = await new Promise((ok, no) => fs.readFile(track.cover, (e, b) => (e ? no(e) : ok(b))));
+                const buf = await new Promise((ok, no) => fs.readFile(file, (e, b) => (e ? no(e) : ok(b))));
                 if (buf.length > 100) {
                     const v = this.fromJpeg(buf);
                     v.src = 'car'; v.carPath = track.cover; v.carMtime = st.mtime.getTime();
