@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.8.0';
+const VERSION = '0.8.1';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -650,13 +650,16 @@ mgu.run({
             log.info('catalog: ' + (catalog.error ? 'error ' + catalog.error : catalog.total + ' interfaces, ' + catalog.hits.length + ' look like media'));
             np.start().then(() => log.info('subscribed: ' + JSON.stringify(np.status())), (e) => log.error('nowplaying start: ' + (e && e.stack || e)));
 
-            /* ---------- BMW's volume bar over full screen: on each volume change the top strip shows for 2.5 s ---------- */
+            /* ---------- BMW's volume signal: logged only, to learn its values (Nov 23: the top strip it opened showed no volume
+             * bar, and pausing sent it too). Next: Car Lyrics' own volume pill, from what this log shows. ---------- */
             (async () => {
-                if (!ctx.display || !ctx.display.peekStatus || !ctx.signals || !ctx.signals.proxy) return;
+                if (!ctx.signals || !ctx.signals.proxy) return;
                 try {
                     const vp = await ctx.signals.proxy('org.genivi.am.commandinterface.CommandControl', '1');
-                    await ctx.signals.on(vp, 'volumeChanged', guard('volume', () => { if (settings.get('hide_status_bar')) ctx.display.peekStatus(2500); }), log);
-                    log.info('volume: watching for BMW\'s volume bar');
+                    await ctx.signals.on(vp, 'volumeChanged', guard('volume', (v) => {
+                        log.info('volume: ' + JSON.stringify(v) + (cur ? ' (' + (cur.playing ? 'playing' : 'paused') + ')' : ''));
+                    }), log);
+                    log.info('volume: watching');
                 } catch (e) { log.info('volume: not available (' + e.message + ')'); }
             })();
 
