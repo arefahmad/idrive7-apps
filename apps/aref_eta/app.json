@@ -2,7 +2,7 @@
   "id": "aref_eta",
   "title": "ETA Bar",
   "description": "Apple Maps' arrival time, time left and distance on the instrument cluster while Apple Maps guides on CarPlay. Two presets: the bottom strip's blank space (black, smoked, outline or plain), or an island at the top that pops out of the driver attention camera like iPhone's Dynamic Island, once or every 10 s to 5 min. Updates with every route change. Starts with the car. Needs the Cluster renderer tool from the Store.",
-  "version": "1.24.2",
+  "version": "1.25.0",
   "vendor": "aref",
   "loggingId": "OAR7",
   "mguAppStartType": "autostart",
@@ -662,6 +662,12 @@
     {
       "key": "design",
       "label": "Cluster design from Cluster Studio (homelab /cluster page)",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "yield_to_apps",
+      "label": "Step aside while another app draws on the cluster (a cluster theme)",
       "type": "bool",
       "default": true
     }

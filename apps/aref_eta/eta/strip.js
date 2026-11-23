@@ -31,6 +31,7 @@ const ISL = require('./island');
 // 0x1000251; pushed to the cluster as 0x1000351 in 0x202). Route guidance in them never counts: the service's own list.
 const POPUP_SLOTS = ['201', '202', '321', '322'];
 const GUIDANCE = ['1000200', '1000201', '1000210', '1000211', '1000300', '1000301', '1000310', '1000311', '1000312', '1000313', '1000314', '1000360'];
+const FOREIGN_HOLD_MS = 2000;   // after another app's last layer goes, ETA Bar comes back this much later
 const POPUP_POLL_MS = 700, POPUP_HOLD_MS = 1300, POPUP_MAX_MS = 60000;   // a safety net: something up longer isn't a pop-up
 const DESIGN = require('./design');
 const SLOT = require('./slot');
@@ -155,7 +156,7 @@ class Strip {
             // renderer's slot table shows them. While one is up, the ETA and the second slot step aside.
             cr.on('status', (text) => { try { this._onStatus(String(text || '')); } catch (e) { /* next */ } });
             this.popTimer = setInterval(() => {
-                if (this.cr && this.cr.status && (this.shown || (this.slot && this.slot.shown) || Date.now() < (this.hideUntil || 0))) { try { this.cr.status(); } catch (e) { /* next */ } }
+                if (this.cr && this.cr.status && (this.shown || (this.slot && this.slot.shown) || (this.design && this.design.shown) || this.pendingRoute || Date.now() < (this.hideUntil || 0) || this.foreign())) { try { this.cr.status(); } catch (e) { /* next */ } }
             }, POPUP_POLL_MS);
             cr.on('refused', (op, ref, reason) => { this.note('cluster: refused ' + op + ': ' + reason); this.state.reason = 'refused: ' + reason; });
             cr.on('error', (e) => { this.state.client = 'error: ' + (e && e.message || e); });
@@ -182,7 +183,28 @@ class Strip {
     idle() { return !this.shown && !this.pending && !(this.isl && this.isl.active) && Date.now() >= (this.previewUntil || 0); }
 
     /** The status text's slot rows: a pop-up slot with content shown (map 1) hides the ETA a little longer. */
+    /**
+     * Another app drawing on the cluster (a cluster theme, say, in whatever drive mode it shows): its layers on the
+     * panel appear in the renderer's status. While one is shown, ETA Bar keeps all of its own off the cluster.
+     */
+    foreign() { return Date.now() < (this.foreignUntil || 0); }
+    _foreignFrom(text) {
+        if (this.ctx && this.ctx.settings && this.ctx.settings.get('yield_to_apps') === false) return;
+        const apps = {};
+        text.split('\n').forEach((line) => {
+            const m = /^layer \d+ \w+ of (\S+) on (\w+), \w+ z -?\d+: (\w+)/.exec(line);
+            if (m && m[2] === 'panel' && m[1] !== 'aref_eta' && m[3] === 'shown') apps[m[1]] = true;
+        });
+        const names = Object.keys(apps).sort().join(', ');
+        if (names) this.foreignUntil = Date.now() + FOREIGN_HOLD_MS;
+        if (names !== (this.foreignNames || '')) {
+            this.foreignNames = names;
+            this.note(names ? 'another app on the cluster (' + names + '): ETA Bar steps aside' : 'no other app on the cluster');
+        }
+    }
+
     _onStatus(text) {
+        this._foreignFrom(text);
         const now = Date.now(), seen = {};
         if (!this.popSince || now - (this.lastStatus || 0) > 3000) this.popSince = {};   // polls paused: start fresh
         this.lastStatus = now;
@@ -252,7 +274,7 @@ class Strip {
         // not over BMW's own strip: while the cluster map is off (BMW shows the odometer there at start) and for a few
         // seconds after a BMW Check Control message (hideFor)
         const mapOff = !preview && this.map.state && this.map.state !== 'shown';
-        const want = !!(this.cfg.on && p && (route || preview)) && !mapOff && Date.now() >= (this.hideUntil || 0) &&
+        const want = !!(this.cfg.on && p && (route || preview)) && !mapOff && Date.now() >= (this.hideUntil || 0) && !this.foreign() &&
             this.onSchedule(!!(route || preview), arrival);
         const key = p ? JSON.stringify(p) + this.styleKey : null;
         try {
@@ -334,7 +356,7 @@ class Strip {
         const mapUp = this.map.state === 'shown';
         if (this.cfg.on && p && (route || preview) && !mapUp && !this.mapNoted) { this.mapNoted = true; this.note('island: waiting for the cluster map (Waze on cluster), map ' + (this.map.state || 'unknown')); }
         if (mapUp) this.mapNoted = false;
-        const want = !!(this.cfg.on && p && (route || preview) && mapUp);
+        const want = !!(this.cfg.on && p && (route || preview) && mapUp && !this.foreign());
         try {
             // the bottom strip: the street name BMW blanks during a CarPlay route (Settings: Street name)
             const st = this.style.street !== false && route && road ? road : null;

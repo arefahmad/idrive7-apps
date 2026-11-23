@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.24.2';
+const VERSION = '1.25.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -224,7 +224,7 @@ mgu.run({
                     thick: THICK[ctx.settings.get('music_bar_thick')] || 3, time: ctx.settings.get('music_time') === 'above' ? 'above' : 'right',
                     back: !!ctx.settings.get('music_bar_back'), textBack: !!ctx.settings.get('music_text_back') });
                 // a BMW message: the second slot fades out with the ETA and back after it, instead of blinking with the cluster's lock
-                strip.slot.update(kind !== 'off' && strip.cfg.on, c);   // BMW's pop-ups and messages move only the ETA strip aside, not this (Nov 21)   // by itself, as BMW's own widget: not tied to the ETA or the map
+                strip.slot.update(kind !== 'off' && strip.cfg.on && !strip.foreign(), c);   // off while another app draws on the cluster   // BMW's pop-ups and messages move only the ETA strip aside, not this (Nov 21)   // by itself, as BMW's own widget: not tied to the ETA or the map
             }), 500);
             ui.onClick('BTN_TARGET', guard('target', () => {
                 strip.moving = !strip.moving ? 'slot' : strip.moving === 'slot' ? 'backdrop' : null;
@@ -235,8 +235,9 @@ mgu.run({
             }));
 
             // Cluster Studio: a whole-cluster design the homelab copied here (eta/design.js)
-            setInterval(guard('design', () => { if (strip.design) strip.design.tick(ctx.settings.get('design') !== false); }), 4000);
+            setInterval(guard('design', () => { if (strip.design) strip.design.tick(ctx.settings.get('design') !== false && !strip.foreign()); }), 4000);
             onRoute = guard('strip', () => { const r = stripRoute();
+                strip.pendingRoute = !!r;                              // a route: the status is polled even while stepped aside
                 if (!r && strip.idle && strip.idle()) return;          // idle: no route, nothing shown, no preview
                 strip.update(r, r ? R.arrivalText(r, Date.now()) : null, road());
             });
