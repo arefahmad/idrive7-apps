@@ -101,6 +101,11 @@ function entryOf(rec) {
     if (rec.instrumental) return { state: 'instrumental' };
     if (rec.syncedLyrics) {
         const lines = parseLrc(rec.syncedLyrics);
+        // the homelab's forced alignment (lyric_align.py): each word's moment, for lines it matched
+        if (rec.wordTimes) lines.forEach((l) => {
+            const w = rec.wordTimes[String(l.t)];
+            if (Array.isArray(w) && w.length === l.text.split(' ').filter(Boolean).length) l.w = w;
+        });
         if (lines.some((l) => l.text)) return showable({ lines }) ? { state: 'synced', lines } : { state: 'undrawable' };
     }
     if (rec.plainLyrics) {

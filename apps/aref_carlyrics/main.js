@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.7.1';
+const VERSION = '0.8.0';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -418,7 +418,22 @@ mgu.run({
                 }
                 const t0 = lines[i].t, next = lines[i + 1] ? lines[i + 1].t : t0 + 8000;
                 const dur = Math.max(LINE_MIN_MS, Math.min(next - t0 - 100, wordLay.chars * CHAR_MS + LINE_MIN_MS));
-                const done = Math.max(0, Math.min(1, (p - t0) / dur)) * wordLay.chars;
+                let done = Math.max(0, Math.min(1, (p - t0) / dur)) * wordLay.chars;
+                const wt = lines[i].w;
+                if (wt) {
+                    // real word times (forced alignment): the word being sung lights across its own length
+                    const flat = [].concat.apply([], wordLay.rows);
+                    if (flat.length === wt.length) {
+                        let k = -1;
+                        while (k + 1 < wt.length && wt[k + 1] <= p) k++;
+                        if (k < 0) done = 0;
+                        else {
+                            const end = k + 1 < wt.length ? wt[k + 1] : Math.min(next, wt[k] + flat[k].w.length * CHAR_MS + 250);
+                            const f = Math.max(0, Math.min(1, (p - wt[k]) / Math.max(60, end - wt[k])));
+                            done = flat[k].c0 + f * (flat[k].c1 - flat[k].c0);
+                        }
+                    }
+                }
                 wordLay.rows.forEach((row, k) => {
                     const by = y + k * LYR.lh + Math.round(size * 0.8);
                     row.forEach((wd) => {
