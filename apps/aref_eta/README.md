@@ -75,6 +75,10 @@ arrival, time left and distance each on or off; AM / PM.
 Why it's drawn rather than sent to BMW's strip: BMW's strip shows an ETA only for BMW's own navigation. 0.2 to
 0.4 tried CarPlay's street field and the guidance state (provider CarPlay, none and other); none changed it.
 
+### Other apps on the cluster (1.25, 1.26)
+
+When another app draws its own cluster (a cluster theme, for example), ETA Bar takes the ETA, the second slot and the Cluster Studio design off the cluster, and puts them back once that app is gone. It reads the cluster renderer's status, so it works for any app and any drive mode. Since 1.26 it also learns which drive modes bring another app's cluster: switch into one of those and ETA Bar steps aside at once, before the other app has finished drawing. It comes back only after the renderer shows the other app gone for 1.5 s, so a theme rebuilding its layers doesn't make the ETA flash in. Settings → "Step aside while another app draws on the cluster" turns this off.
+
 ## Safety
 
 It only reads the car's guidance services. It draws one small layer on the cluster through the Cluster

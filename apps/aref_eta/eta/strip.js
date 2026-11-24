@@ -31,7 +31,10 @@ const ISL = require('./island');
 // 0x1000251; pushed to the cluster as 0x1000351 in 0x202). Route guidance in them never counts: the service's own list.
 const POPUP_SLOTS = ['201', '202', '321', '322'];
 const GUIDANCE = ['1000200', '1000201', '1000210', '1000211', '1000300', '1000301', '1000310', '1000311', '1000312', '1000313', '1000314', '1000360'];
-const FOREIGN_HOLD_MS = 2000;   // after another app's last layer goes, ETA Bar comes back this much later
+// Another app's cluster (a theme): ETA Bar comes back only after a status read shows it gone, and CLEAR_MS later.
+// A drive mode change is the earliest warning: in a mode where another app drew before, ETA Bar steps aside at once;
+// in a mode it hasn't seen yet (once any app has drawn), it waits MODE_GRACE_MS for the renderer to tell.
+const CLEAR_MS = 1500, MODE_GRACE_MS = 2500, FAST_MS = 4000, FAST_POLL_MS = 250, STATUS_STALE_MS = 10000;
 const POPUP_POLL_MS = 700, POPUP_HOLD_MS = 1300, POPUP_MAX_MS = 60000;   // a safety net: something up longer isn't a pop-up
 const DESIGN = require('./design');
 const SLOT = require('./slot');
@@ -155,9 +158,13 @@ class Strip {
             // BMW's own pop-ups (heated steering, seat heating, volume...): not Check Control messages, so only the
             // renderer's slot table shows them. While one is up, the ETA and the second slot step aside.
             cr.on('status', (text) => { try { this._onStatus(String(text || '')); } catch (e) { /* next */ } });
+            // every 700 ms while anything could show; every 250 ms for 4 s after a drive mode change (a theme coming)
+            let tick = 0;
             this.popTimer = setInterval(() => {
-                if (this.cr && this.cr.status && (this.shown || (this.slot && this.slot.shown) || (this.design && this.design.shown) || this.pendingRoute || Date.now() < (this.hideUntil || 0) || this.foreign())) { try { this.cr.status(); } catch (e) { /* next */ } }
-            }, POPUP_POLL_MS);
+                const now = Date.now(), fast = now < (this.fastUntil || 0);
+                if (!fast && (++tick % Math.round(POPUP_POLL_MS / FAST_POLL_MS)) !== 0) return;
+                if (this.cr && this.cr.status && (fast || this.shown || (this.slot && this.slot.shown) || (this.design && this.design.shown) || this.pendingRoute || now < (this.hideUntil || 0) || this.foreign())) { try { this.cr.status(); } catch (e) { /* next */ } }
+            }, FAST_POLL_MS);
             cr.on('refused', (op, ref, reason) => { this.note('cluster: refused ' + op + ': ' + reason); this.state.reason = 'refused: ' + reason; });
             cr.on('error', (e) => { this.state.client = 'error: ' + (e && e.message || e); });
             const r = this.rect();
@@ -187,20 +194,70 @@ class Strip {
      * Another app drawing on the cluster (a cluster theme, say, in whatever drive mode it shows): its layers on the
      * panel appear in the renderer's status. While one is shown, ETA Bar keeps all of its own off the cluster.
      */
-    foreign() { return Date.now() < (this.foreignUntil || 0); }
+    yielding() { return !(this.ctx && this.ctx.settings && this.ctx.settings.get('yield_to_apps') === false); }
+    foreign() {
+        if (!this.yielding()) return false;
+        const now = Date.now();
+        if (now < (this.modeHoldUntil || 0)) return true;
+        if (!this.foreignOn) return false;
+        if (now - (this.foreignReadAt || 0) > STATUS_STALE_MS) return false;     // no status reads: don't stay hidden forever
+        return !this.foreignOffAt || now < this.foreignOffAt + CLEAR_MS;
+    }
+    _changed() { if (this.onYield) { try { this.onYield(); } catch (e) { /* next tick */ } } }
+    /**
+     * The drive mode changed (car data): another app's cluster may be coming or going. cfg.themeModes remembers, per
+     * mode, whether another app drew on the panel there (learned from the renderer's status, never set by hand).
+     */
+    modeChanged(mode) {
+        const was = this.mode;
+        this.mode = mode; this.modeAt = Date.now();
+        if (was === undefined || !this.yielding()) return;
+        this.fastUntil = Date.now() + FAST_MS;
+        const tm = this.cfg.themeModes || {}, known = Object.keys(tm).some((k) => tm[k]);
+        if (!known) return;                                          // no other app has ever drawn here: nothing to wait for
+        const hold = tm[mode] === true ? MODE_GRACE_MS + 1500 : tm[mode] === false ? 0 : MODE_GRACE_MS;
+        if (hold) {
+            this.modeHoldUntil = Date.now() + hold;
+            this.note('drive mode ' + (was || '?') + ' -> ' + (mode || '?') + ': ' + (tm[mode] ? 'another app draws here, ETA Bar steps aside now' : 'waiting ' + (hold / 1000) + ' s for the cluster'));
+            this._changed();
+        } else this.note('drive mode ' + (was || '?') + ' -> ' + (mode || '?') + ': no other app here');
+    }
+    _learn(mode, drawn) {
+        if (!mode) return;
+        const tm = this.cfg.themeModes = this.cfg.themeModes || {};
+        if (tm[mode] === drawn) return;
+        tm[mode] = drawn; this.save();
+        this.note('learned: ' + (drawn ? 'another app draws on the cluster in ' : 'no other app draws in ') + mode);
+    }
+    /**
+     * Another app drawing on the cluster (a cluster theme, say, in whatever drive mode it shows): its layers on the
+     * panel appear in the renderer's status, in any state but hidden (a theme builds a dozen layers while it comes up).
+     * While one is there, ETA Bar keeps all of its own off the cluster.
+     */
     _foreignFrom(text) {
-        if (this.ctx && this.ctx.settings && this.ctx.settings.get('yield_to_apps') === false) return;
-        const apps = {};
+        if (!this.yielding()) return;
+        const apps = {}, now = Date.now();
+        this.foreignReadAt = now;
         text.split('\n').forEach((line) => {
             const m = /^layer \d+ \w+ of (\S+) on (\w+), \w+ z -?\d+: (\w+)/.exec(line);
-            if (m && m[2] === 'panel' && m[1] !== 'aref_eta' && m[3] === 'shown') apps[m[1]] = true;
+            if (m && m[2] === 'panel' && m[1] !== 'aref_eta' && m[3] !== 'hidden') apps[m[1].replace(/_\d+$/, '')] = true;
         });
         const names = Object.keys(apps).sort().join(', ');
-        if (names) this.foreignUntil = Date.now() + FOREIGN_HOLD_MS;
-        if (names !== (this.foreignNames || '')) {
-            this.foreignNames = names;
-            this.note(names ? 'another app on the cluster (' + names + '): ETA Bar steps aside' : 'no other app on the cluster');
+        const settled = this.modeAt && now - this.modeAt > MODE_GRACE_MS + 500;
+        const before = this.foreign();
+        if (names) {
+            this.foreignOn = true; this.foreignOffAt = 0;
+            this.modeHoldUntil = 0;                                  // the renderer says so now: no need for the guess
+            this._learn(this.mode, true);
+        } else if (this.foreignOn) {
+            if (!this.foreignOffAt) this.foreignOffAt = now;
+            else if (now >= this.foreignOffAt + CLEAR_MS) { this.foreignOn = false; this.foreignOffAt = 0; }
         }
+        if (!names && settled && !this.foreignOn) this._learn(this.mode, false);
+        if (names && names !== (this.foreignNames || '')) this.note('another app on the cluster (' + names + '): ETA Bar steps aside');
+        if (!this.foreignOn && this.foreignNames) { this.note('no other app on the cluster: ETA Bar comes back'); this.foreignNames = ''; this._changed(); return; }
+        if (names || !this.foreignOn) this.foreignNames = names;
+        if (this.foreign() !== before) this._changed();
     }
 
     _onStatus(text) {

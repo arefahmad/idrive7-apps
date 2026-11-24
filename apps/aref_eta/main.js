@@ -175,7 +175,7 @@ mgu.run({
             const textOf = (v) => { const e = v && v.elements; return Array.isArray(e) && e.length ? e.map((x) => x && x.text).filter(Boolean).join(' ') || null : null; };
             const road = () => navStreet || textOf(val('carplay.currentRoad'));
             // the second slot: oil / gear / g / clock / music where BMW's widgets are, while the strip holds the panel
-            const car = new Car(ctx, ['temps', 'gear', 'accel', 'program'], { demo: false });
+            const car = new Car(ctx, ['temps', 'gear', 'accel', 'program', 'drivemode'], { demo: false });
             const NP_IFACES = [
                 { iface: 'de.bmw.infotainment.a4a.carplay.CarPlayManager', instances: ['CarPlayManagerInst1'] },
                 { iface: 'de.bmw.infotainment.entertainment.mediaplayer.MediaPlayer', instances: [] },
@@ -198,7 +198,7 @@ mgu.run({
                 }
                 return (lastCover = covers[e.ver]);
             };
-            setInterval(guard('slot', () => {
+            const slotTick = guard('slot', () => {
                 if (!strip.slot) return;
                 const kind = slotKind();
                 if (kind === 'off' && !strip.slot.shown) return;        // idle: nothing to draw or hide
@@ -225,7 +225,8 @@ mgu.run({
                     back: !!ctx.settings.get('music_bar_back'), textBack: !!ctx.settings.get('music_text_back') });
                 // a BMW message: the second slot fades out with the ETA and back after it, instead of blinking with the cluster's lock
                 strip.slot.update(kind !== 'off' && strip.cfg.on && !strip.foreign(), c);   // off while another app draws on the cluster   // BMW's pop-ups and messages move only the ETA strip aside, not this (Nov 21)   // by itself, as BMW's own widget: not tied to the ETA or the map
-            }), 500);
+            });
+            setInterval(slotTick, 500);
             ui.onClick('BTN_TARGET', guard('target', () => {
                 strip.moving = !strip.moving ? 'slot' : strip.moving === 'slot' ? 'backdrop' : null;
                 const L = { slot: 'Moving: 2nd slot', backdrop: 'Moving: music backdrop' };
@@ -235,13 +236,18 @@ mgu.run({
             }));
 
             // Cluster Studio: a whole-cluster design the homelab copied here (eta/design.js)
-            setInterval(guard('design', () => { if (strip.design) strip.design.tick(ctx.settings.get('design') !== false && !strip.foreign()); }), 4000);
+            const designTick = guard('design', () => { if (strip.design) strip.design.tick(ctx.settings.get('design') !== false && !strip.foreign()); });
+            setInterval(designTick, 4000);
             onRoute = guard('strip', () => { const r = stripRoute();
                 strip.pendingRoute = !!r;                              // a route: the status is polled even while stepped aside
                 if (!r && strip.idle && strip.idle()) return;          // idle: no route, nothing shown, no preview
                 strip.update(r, r ? R.arrivalText(r, Date.now()) : null, road());
             });
             setInterval(onRoute, 1000);
+            // another app's cluster coming or going: everything of ours follows at once, not on its next tick
+            strip.onYield = () => { onRoute(); slotTick(); designTick(); };
+            // the drive mode: the first hint that a cluster theme is about to come or go (strip.modeChanged)
+            setInterval(guard('mode', () => { const m = car.data().driveMode; if (m !== strip.mode) strip.modeChanged(m); }), 200);
             const placed = () => say('Moved. Showing a preview on the cluster for 30 seconds.');
             // the button says what it will do, so an accidental press is easy to see and undo
             const toggleLabel = () => { try { ui.text('BTN_TOGGLE', strip.cfg.on ? 'Turn ETA off' : 'Turn ETA on'); } catch (e) { /* */ } };
