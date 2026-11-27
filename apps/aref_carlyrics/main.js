@@ -393,17 +393,34 @@ mgu.run({
             /* the lyrics' layout for a song: each line wrapped, and where it sits (cached; textWidth isn't free) */
             let laid = null;          // { lines, w, blocks: [{ rows, top, h, gap }] }
             function layout(cv, lines, w) {
-                if (laid && laid.lines === lines && laid.w === w && laid.size === LYR.size) return laid;
-                const opt = { font: F_BOLD, literal: true }, blocks = [];
+                const mode = settings.get('translation') || 'en';
+                if (laid && laid.lines === lines && laid.w === w && laid.size === LYR.size && laid.mode === mode) return laid;
+                const opt = { font: F_BOLD, literal: true }, sopt = { font: F_MED, literal: true }, blocks = [];
+                const SUB = subSize();
                 let y = 0;
                 lines.forEach((l) => {
                     const rows = l.text ? wrap(cv, l.text, LYR.size, w, LYR.max, opt) : [];
-                    const h = rows.length ? rows.length * LYR.lh : LYR.lh;
-                    blocks.push({ rows: rows, top: y, h: h });
+                    let h = rows.length ? rows.length * LYR.lh : LYR.lh;
+                    // under the line, as Apple Music: its pronunciation and / or its English (Settings > Translation)
+                    const subs = [];
+                    if (rows.length && (mode === 'ro' || mode === 'both') && l.ro) wrap(cv, l.ro, SUB.size, w, 2, sopt).forEach((r) => subs.push(r));
+                    if (rows.length && (mode === 'en' || mode === 'both') && l.tr) wrap(cv, l.tr, SUB.size, w, 3, sopt).forEach((r) => subs.push(r));
+                    if (subs.length) h += SUB.pad + subs.length * SUB.lh;
+                    blocks.push({ rows: rows, subs: subs, top: y, h: h });
                     y += h + LYR.gap;
                 });
-                laid = { lines: lines, w: w, blocks: blocks, size: LYR.size };
+                laid = { lines: lines, w: w, blocks: blocks, size: LYR.size, mode: mode };
                 return laid;
+            }
+            /** The translation under a line: a little over half the lyrics' size, in the medium weight. */
+            function subSize() { const size = Math.round(LYR.size * 0.56); return { size: size, lh: Math.round(size * 1.3), pad: Math.round(LYR.size * 0.22) }; }
+            function drawSubs(cv, b, x, y, a, blur) {
+                if (!b.subs || !b.subs.length) return;
+                const S = subSize(), o = { font: F_MED, literal: true }, y0 = y + b.rows.length * LYR.lh + S.pad;
+                b.subs.forEach((r, k) => {
+                    const by = y0 + k * S.lh + Math.round(S.size * 0.8);
+                    cv.alpha(a * 0.72); cv.text(r, x, by, S.size, WHITE, o); cv.alpha(1);
+                });
             }
             let glide = { i: -2, from: 0, to: 0, at: 0, prev: -1 };    // the scroll to line i
             function drawSynced(cv, Q, lines, now) {
@@ -430,6 +447,7 @@ mgu.run({
                     a *= Math.max(0, edge);
                     if (a <= 0.01) continue;
                     if (!b.rows.length) { dots(cv, Q.LX, y, j === i ? 1 : a, lines, j, p); continue; }
+                    drawSubs(cv, b, Q.LX, y, a, blur);
                     if (j === i && i >= 0 && settings.get('word_highlight') !== false) { sungWords(cv, b, lines, i, p, Q.LX, y, a, [Q.LX - 20, top, W - (Q.LX - 20), bottom - top]); continue; }
                     b.rows.forEach((row, k) => soft(cv, row, Q.LX, y + k * LYR.lh + Math.round(LYR.size * 0.8), LYR.size, a, blur));
                 }

@@ -106,6 +106,13 @@ function entryOf(rec) {
             const w = rec.wordTimes[String(l.t)];
             if (Array.isArray(w) && w.length === l.text.split(' ').filter(Boolean).length) l.w = w;
         });
+        // the homelab's translation (lyric_translate.py): English and the pronunciation in Latin letters, per line
+        const tr = rec.translation || {}, ro = rec.romanization || {};
+        lines.forEach((l) => {
+            const k = String(l.t);
+            if (typeof tr[k] === 'string' && tr[k].trim()) l.tr = clean(tr[k]);
+            if (typeof ro[k] === 'string' && ro[k].trim()) l.ro = clean(ro[k]);
+        });
         if (lines.some((l) => l.text)) return showable({ lines }) ? { state: 'synced', lines } : { state: 'undrawable' };
     }
     if (rec.plainLyrics) {
