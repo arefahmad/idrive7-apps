@@ -14,7 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const POLL_MS = 1500, GIVE_UP_MS = 90000, RETRY_MS = 10 * 60 * 1000;
+const POLL_MS = 1500, GIVE_UP_MS = 90000, RETRY_MS = 10 * 60 * 1000, DISK_RECHECK_MS = 30000;
 const ENGLISH = new Set(("the a an and i you me my your it is are was be to of in on for with that this what we he she they " +
     "not no do dont don't im i'm can just like love know all so but oh yeah baby when if up down").split(' '));
 const SCRIPTS = /[֐-ࣿЀ-ӿͰ-Ͽ぀-ヿ一-鿿가-힯]/;
@@ -37,6 +37,7 @@ class Translator {
         this.failed = new Map();         // song key -> when it last failed
         this.busy = null;
         this.ver = 0;                    // bumped when lines get translations (the screen lays out again)
+        this.diskAt = new Map();         // song key -> when its file was last looked at
     }
 
     cfg() {
@@ -50,9 +51,14 @@ class Translator {
         if (!lines.length || lines.some((l) => l.tr || l.ro)) { this.done.add(entry.lines); return; }   // from the file already
         if (!foreign(lines.map((l) => l.text))) { this.done.add(entry.lines); return; }
         const key = track.title + '|' + track.artist;
+        // the homelab may have copied a translated file in since these lyrics were read: that first, no network
+        if (Date.now() - (this.diskAt.get(key) || 0) > DISK_RECHECK_MS) {
+            this.diskAt.set(key, Date.now());
+            if (this._fromDisk(track, entry)) { this.done.add(entry.lines); return; }
+        }
         if (Date.now() - (this.failed.get(key) || 0) < RETRY_MS || !online) return;
         const c = this.cfg();
-        if (!c) { this.done.add(entry.lines); return; }
+        if (!c) return;                 // no key here yet (the homelab copies it in): looked at again next time
         this.busy = this._run(c, track, entry, lines, key).catch((e) => { this.failed.set(key, Date.now()); this.log.warn('translate: ' + e.message); })
             .then(() => { this.busy = null; });
     }
@@ -75,6 +81,17 @@ class Translator {
         const n = Object.keys(r.translation || {}).length;
         this.log.info('translate: "' + track.title + '" ' + (r.language || '?') + ', ' + n + ' lines in ' + (Date.now() - t0) + ' ms');
         if (n || Object.keys(r.romanization || {}).length) this._save(track, r);
+    }
+
+    /** the song's lyrics file on disk, if it has a translation now: put on the lines (true) */
+    _fromDisk(track, entry) {
+        try {
+            const rec = JSON.parse(fs.readFileSync(path.join(this.lyricsDir, this.diskKey(track) + '.json'), 'utf8'));
+            if (!rec || !(rec.translation && Object.keys(rec.translation).length) && !(rec.romanization && Object.keys(rec.romanization).length)) return false;
+            const n = this._apply(entry, { translation: rec.translation, romanization: rec.romanization });
+            this.log.info('translate: "' + track.title + '" from its file (' + n + ' lines)');
+            return n > 0 || Object.keys(rec.romanization || {}).length > 0;
+        } catch (e) { return false; }
     }
 
     /** puts what's arrived on the lines; returns how many lines have a translation */
