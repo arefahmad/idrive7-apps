@@ -241,11 +241,25 @@ class Lights extends EventEmitter {
             const from = Math.max(now, this._mqUntil || now), to = now + 2500;
             const add = this.musicPlan(from, to, W);
             if (!add.length && !(this._mq && this._mq.length)) { this._mq = null; this._mqUntil = 0; return undefined; }
-            this._mq = (this._mq || []).concat(add.filter((e) => !this._mq || !this._mq.some((q) => q.beat === e.beat && q.down === e.down)));
+            const id = (e) => e.key || ('b' + e.beat + (e.down ? 'd' : 'u'));
+            const have = new Set((this._mq || []).map(id));
+            this._mq = (this._mq || []).concat(add.filter((e) => !have.has(id(e))));
             this._mqUntil = to;
         }
-        // a change written late is worth little: a light-up more than a write late is dropped (its dim stays)
-        while (this._mq.length && !this._mq[0].down && this._mq[0].at < now - W) this._mq.shift();
+        // a change written late is worth little: a light-up more than a write late is dropped (its dim stays); Flow's
+        // steps late by more than a write, and those that would barely change the light, are skipped
+        for (;;) {
+            const q = this._mq[0];
+            if (!q) break;
+            if (q.soft) {
+                const l0 = this.lights.find((l) => l.bus === q.bus), had = l0 && this._last.get(l0);
+                const base = l0 ? S.lightAt(this.scene, l0, now - this.t0) : null;
+                const tiny = had && base && Math.abs(had.bright - Math.round(base.bright * q.k * this._dim)) < 2 &&
+                    Math.abs(S.hueOf(had.rgb) - S.hueOf(q.hue ? S.turn(base.rgb, q.hue) : base.rgb)) < 3 && now - had.at < 2500;
+                if (q.at < now - W || tiny) { this._mq.shift(); continue; }
+            } else if (!q.down && q.at < now - W) { this._mq.shift(); continue; }
+            break;
+        }
         const e = this._mq[0];
         if (!e) return null;
         const writes = e.bus === null ? 2 : 1, lead = W * (writes === 2 ? 1.5 : 1);

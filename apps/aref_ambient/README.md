@@ -21,7 +21,15 @@ A light write takes about 200 ms and only one goes at a time, so the writes are 
 much early): on each beat the light comes up, half a beat later it goes back down. When a beat is long enough for
 four writes both sides light together; faster songs take turns, left on one beat and right on the next.
 
-Settings → **Music**: Off, Pulse on the beat (default), or Pulse driving, flash when parked.
+Settings → **Music**: Off, **Flow with the song** (default), Pulse on the beat, or Pulse driving, flash when parked.
+
+**Flow** follows the song's shape, not its hits: brightness rises and falls with the song's energy (its loudness,
+smoothed over seconds, so a chorus swells and a verse or a break settles), a soft breath on each bar's first beat,
+and the colour drifting slowly around your look's colour, a little warmer as the song builds. The sides are written
+in turn, a moment apart, so each change travels across the cabin. The light modules have no fade of their own (a
+write is "this colour now"), so Flow moves in small steps: on real songs a median of 1-2 brightness points and 1-5
+degrees of colour per write. No microphone: the car's microphones belong to calls, eCall and voice control, apps
+can't open them, and a microphone hears road noise and voices too.
 
 - **Driving:** a soft pulse, never under 55 % of your look's brightness, no colour changes.
 - **Parked** (with "flash when parked"): full flashes and the colour turning each bar.

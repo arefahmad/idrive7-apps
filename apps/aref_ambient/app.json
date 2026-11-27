@@ -2,7 +2,7 @@
   "id": "aref_ambient",
   "title": "Cabin Light",
   "description": "Aref's ambient lighting: any colour, animations, a look for each driving mode, door and turn-signal lights, and Music: the lights move with the song's beat (beat maps from the owner's homelab).",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "vendor": "aref",
   "loggingId": "OAR9",
   "iconGlyph": "ambient",
@@ -75,13 +75,17 @@
   "settings": [
     {
       "key": "music",
-      "label": "Music: the light moves with the beat",
+      "label": "Music",
       "type": "choice",
-      "default": "pulse",
+      "default": "flow",
       "options": [
         [
           "off",
           "Off"
+        ],
+        [
+          "flow",
+          "Flow with the song"
         ],
         [
           "pulse",
@@ -89,7 +93,7 @@
         ],
         [
           "flash",
-          "Pulse driving, flash when parked"
+          "Pulse, flash when parked"
         ]
       ]
     },

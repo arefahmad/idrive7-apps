@@ -91,6 +91,7 @@ class Music {
         if (!this.on() || !this.cur || !this.clk || !this.cur.playing) return null;
         if (!this.map) { if (Date.now() - (this.loadedAt || 0) > 60000) this._load(); return null; }
         const pos = this._clockAt(t), b = this.map.beats;
+        if ((this.settings.get('music') || 'flow') === 'flow') return this.flowAt(pos, 60000 / this.map.bpm);
         // the last beat at or before pos (binary search)
         let lo = 0, hi = b.length - 1;
         if (pos < b[0] || pos > b[hi] + 2000) return null;
@@ -115,6 +116,7 @@ class Music {
      */
     plan(from, to, writeMs) {
         if (!this.on() || !this.cur || !this.clk || !this.cur.playing || !this.map) return [];
+        if ((this.settings.get('music') || 'flow') === 'flow') return this._flow(from, to, writeMs);
         const p0 = this._clockAt(from), off = from - p0;          // song ms -> epoch: + off
         const b = this.map.beats, out = [], period = 60000 / this.map.bpm;
         const both = period >= 4 * writeMs;
@@ -134,6 +136,58 @@ class Music {
             out.push({ at: at + period * 0.5, bus: bus, k: floor, hue: hue, beat: i, down: true });
         }
         return out;
+    }
+
+    /**
+     * Flow (the default): the light follows the song's shape, not its hits. Brightness rises and falls with the song's
+     * energy (its loudness, smoothed over a few seconds, so a chorus swells and a verse settles), with a soft breath on
+     * each bar's first beat; the colour drifts slowly around the look's own colour and warms a little as the song
+     * builds. The two sides are written in turn, each a moment after the other, so a change travels across the cabin.
+     * Small steps only (a write every ~0.4 s a side, skipped when the light would barely change).
+     */
+    _flow(from, to, writeMs) {
+        const W = Math.max(150, writeMs), out = [], step = W;
+        const p0 = this._clockAt(from), off = from - p0, period = 60000 / this.map.bpm;
+        let t = Math.ceil(from / step) * step;
+        for (; t <= to; t += step) {
+            const slot = Math.round(t / step), bus = slot % 2;
+            const pos = t - off + (bus ? 120 : 0);                     // the second side a moment later: a wave
+            const v = this.flowAt(pos, period);
+            if (!v) continue;
+            out.push({ at: t, bus: bus, k: v.k, hue: v.hue, key: 'f' + slot, soft: true });
+        }
+        return out;
+    }
+
+    /** Flow's light at song time pos (ms): { k, hue } */
+    flowAt(pos, period) {
+        const m = this.map;
+        if (pos < m.beats[0] - 2000 || pos > m.beats[m.beats.length - 1] + 3000) return null;
+        // energy: the 4 s loudness windows, joined smoothly (cosine between their middles)
+        const L = m.loud;
+        let e = 0.6;
+        if (L.length) {
+            const mid = (s) => (s[0] + s[1]) / 2;
+            let i = 0;
+            while (i + 1 < L.length && mid(L[i + 1]) <= pos) i++;
+            const a = L[i], b = L[Math.min(L.length - 1, i + 1)];
+            const f = b === a ? 0 : Math.max(0, Math.min(1, (pos - mid(a)) / (mid(b) - mid(a))));
+            e = a[2] + (b[2] - a[2]) * (0.5 - 0.5 * Math.cos(Math.PI * f));
+        }
+        // the bar's first beat: a soft breath (up to 12 %), easing in and out over the bar
+        let breath = 0;
+        const b = m.beats;
+        let lo = 0, hi = b.length - 1;
+        while (lo < hi) { const md = (lo + hi + 1) >> 1; if (b[md] <= pos) lo = md; else hi = md - 1; }
+        let bi = lo; while (bi > 0 && !m.bar[bi]) bi--;
+        const sinceBar = pos - b[bi], bar = period * 4;
+        if (sinceBar >= 0 && sinceBar < bar) breath = Math.pow(0.5 + 0.5 * Math.cos(2 * Math.PI * sinceBar / bar), 2);
+        const parked = this.moving() === false;
+        const floor = parked ? 0.25 : 0.45;
+        const k = floor + (1 - floor) * Math.min(1, 0.15 + 0.85 * e) * (0.88 + 0.12 * breath);
+        // colour: around the look's colour, +-25 degrees over 16 bars, and up to 20 degrees warmer as the song builds
+        const hue = 25 * Math.sin(2 * Math.PI * pos / (bar * 16)) - 20 * Math.max(0, e - 0.5) * 2;
+        return { k: k, hue: (hue + 360) % 360 };
     }
 
     state() {
