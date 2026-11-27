@@ -293,6 +293,10 @@ async function carLyrics() {
     h.ctx.settings.set('arrangement', 'full'); h.ctx.settings.set('style', 'glass'); h.ctx.settings.set('lyrics_size', 'large');
     await h.shot('MAIN', 'lyrics-large.png');
     h.ctx.settings.set('lyrics_size', 'medium');
+    // Background motion > Flow: the cover's colours swirling (a few seconds in)
+    h.ctx.settings.set('bg_motion', 'flow');
+    for (let k = 0; k < 40; k++) { later += 100; await h.shot('MAIN', 'lyrics-flow.png'); }
+    h.ctx.settings.set('bg_motion', 'still');
     later = 0;
     h.ctx.settings.set('probe_tab', true);
     h.ctx.tab(1);

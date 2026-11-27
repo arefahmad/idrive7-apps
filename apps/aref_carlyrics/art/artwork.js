@@ -152,6 +152,49 @@ function backdrop(px, n, w, h, turned) {
     return out;
 }
 
+/**
+ * Apple Music's flowing background is the cover's colours swirling, not one blurred picture sliding: the colour
+ * blobs. Nine patches of the cover (a 3 x 3 grid, each half the cover wide) are compared by their average colour and
+ * the BLOB_N most different are kept (the first is the most colourful); each is blurred, lifted like the backdrop
+ * (a little brighter) and faded to clear towards a soft round edge. RGBA bytes, BLOB_PX square, straight alpha.
+ */
+const BLOB_PX = 128, BLOB_N = 4;
+function blobs(px, n) {
+    const side = Math.round(n / 2), spots = [];
+    for (let gy = 0; gy < 3; gy++) for (let gx = 0; gx < 3; gx++) {
+        const x0 = Math.round((n - side) * gx / 2), y0 = Math.round((n - side) * gy / 2);
+        let r = 0, g = 0, b = 0, k = 0;
+        for (let y = y0 + 4; y < y0 + side - 4; y += 4) for (let x = x0 + 4; x < x0 + side - 4; x += 4) { const i = (y * n + x) * 4; r += px[i]; g += px[i + 1]; b += px[i + 2]; k++; }
+        r /= k; g /= k; b /= k;
+        spots.push({ x0, y0, c: [r, g, b], sat: Math.max(r, g, b) - Math.min(r, g, b) });
+    }
+    const dist = (a, b) => Math.hypot(a.c[0] - b.c[0], a.c[1] - b.c[1], a.c[2] - b.c[2]);
+    const picked = [spots.slice().sort((a, b) => b.sat - a.sat)[0]];
+    while (picked.length < BLOB_N) {
+        let best = null, bestD = -1;
+        spots.forEach((sp) => { if (picked.indexOf(sp) >= 0) return; const d = Math.min.apply(null, picked.map((q) => dist(q, sp))); if (d > bestD) { bestD = d; best = sp; } });
+        picked.push(best);
+    }
+    const B = BLOB_PX, k = side / B;
+    return picked.map((sp) => {
+        const c = new Float32Array(B * B * 3);
+        for (let y = 0; y < B; y++) for (let x = 0; x < B; x++) {
+            const sx = Math.min(n - 1, Math.round(sp.x0 + (x + 0.5) * k)), sy = Math.min(n - 1, Math.round(sp.y0 + (y + 0.5) * k));
+            const s = (sy * n + sx) * 4, o = (y * B + x) * 3;
+            c[o] = px[s]; c[o + 1] = px[s + 1]; c[o + 2] = px[s + 2];
+        }
+        for (let i = 0; i < 3; i++) boxPass(c, B, B, 9);
+        const out = new Uint8Array(B * B * 4), h = (B - 1) / 2;
+        for (let y = 0; y < B; y++) for (let x = 0; x < B; x++) {
+            const o = (y * B + x) * 3, q = (y * B + x) * 4, r0 = c[o], g0 = c[o + 1], b0 = c[o + 2], l = 0.3 * r0 + 0.59 * g0 + 0.11 * b0;
+            const v = (u) => Math.max(0, Math.min(255, (l + (u - l) * SATURATE * 1.15) * DIM * 1.25));
+            const d = Math.min(1, Math.hypot(x - h, y - h) / h), f = 1 - d * d * (3 - 2 * d);   // no visible rim: fades from the middle out
+            out[q] = v(r0); out[q + 1] = v(g0); out[q + 2] = v(b0); out[q + 3] = Math.round(255 * Math.pow(f, 1.4));
+        }
+        return out;
+    });
+}
+
 class Artwork {
     /**
      * opts: { px: the cover's side (default ART_PX), blur: false to skip the page backdrops (ETA Bar draws its own),
@@ -307,9 +350,9 @@ class Artwork {
         const im = this.decode(buf, { useTArray: true, formatAsRGBA: true, maxResolutionInMP: 4, maxMemoryUsageInMB: 48 });
         const n = this.opts.px, sq = squareResample(im.data, im.width, im.height, n, Math.round(n * ART_R));
         const e = { state: 'ready', at: Date.now(), cover: sq.px, n: n, tint: sq.avg };
-        if (this.opts.blur) { e.blur = backdrop(sq.px, n, BG_W, BG_H); e.blur2 = backdrop(sq.px, n, BG_W, BG_H, true); }
-        return e;;
+        if (this.opts.blur) { e.blur = backdrop(sq.px, n, BG_W, BG_H); e.blur2 = backdrop(sq.px, n, BG_W, BG_H, true); e.blobs = blobs(sq.px, n); }
+        return e;
     }
 }
 
-module.exports = { Artwork, pick, sized, squareResample, backdrop, ART_PX, BG_W, BG_H };
+module.exports = { Artwork, pick, sized, squareResample, backdrop, blobs, ART_PX, BG_W, BG_H, BLOB_PX, BLOB_N };

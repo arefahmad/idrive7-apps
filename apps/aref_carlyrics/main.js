@@ -45,7 +45,7 @@ const IFACES = [
     { iface: 'de.bmw.infotainment.hmi.hmimediastate.HmiMediaState', instances: [] },
     { iface: 'de.bmw.infotainment.entertainment.dynamicmediaplayer.DynamicMediaPlayer', instances: [] },
 ];
-const ART_ID = 41, BG_ID = 42, BG2_ID = 43;    // pixel picture ids (record.setImage)
+const ART_ID = 41, BG_ID = 42, BG2_ID = 43, BLOB_ID = 44;    // pixel picture ids (record.setImage); blobs 44-47
 const FRAME_MS = 1000 / 60;       // the animation clock's step: up to 60 different frames a second while lines glide (identical frames still aren't sent)
 const LEAD_MS = 250;              // a line lights up this much before its time (reading takes a moment)
 const GLIDE_MS = 620;             // the lyrics glide to the next line over this long
@@ -175,6 +175,7 @@ mgu.run({
                     record.setImage(ART_ID, ART.ART_PX, ART.ART_PX, a.cover);
                     record.setImage(BG_ID, ART.BG_W, ART.BG_H, a.blur);
                     record.setImage(BG2_ID, ART.BG_W, ART.BG_H, a.blur2);
+                    (a.blobs || []).forEach((b, i) => record.setImage(BLOB_ID + i, ART.BLOB_PX, ART.BLOB_PX, b));
                     artShown = a.ver;
                 }
                 return a;
@@ -187,6 +188,8 @@ mgu.run({
 
             /** The layout in the safe area A: the cover centred in the left half, the lyrics in the right half. */
             // 0.5.1-0.5.3 kept the arrangement in 'layout', which is the kit's (full screen or BMW's frame): moved over
+            // 0.9.0: the old drift becomes the stronger Apple Music flow for anyone who had it on (once)
+            try { if (settings.get('bg_motion') === 'drift' && !settings.get('_flowV')) { settings.set('bg_motion', 'flow'); settings.set('_flowV', 1); log.info('settings: drift -> flow'); } } catch (e) { /* */ }
             try { if (settings.get('layout') === 'side') { settings.set('arrangement', 'side'); settings.set('layout', 'full'); log.info('settings: arrangement moved out of layout'); } } catch (e) { /* */ }
             const glassOn = () => settings.get('style') !== 'classic';
             const sideOn = () => settings.get('arrangement') === 'side';   // ('layout' is the kit's own: full screen or not)      // a big cover, the lyrics beside it
@@ -281,12 +284,48 @@ mgu.run({
             }
 
             const OVER = 160;          // logical px drawn past the page's top and bottom edges
+            // the background's own clock: runs while the song plays, stands still while paused (no jump back)
+            let flowT = 0, flowAt = 0;
+            function flowClock(now) {
+                const dt = flowAt ? Math.min(0.1, Math.max(0, (now - flowAt) / 1000)) : 0;
+                if (now !== flowAt) { if (cur && cur.playing) flowT += dt; flowAt = now; }
+                return flowT;
+            }
+            /**
+             * Settings > Background motion > Flow, as Apple Music: the blurred cover underneath, and the cover's
+             * colours (artwork.js blobs: four soft round patches, the most different colours in it) swirling over it
+             * on long orbits across the whole screen, each at its own speed, growing and shrinking a little. A blob
+             * crosses the screen in about 10 s (~200 px/s at its fastest), so the colours visibly travel.
+             */
+            const BLOBS = [   // size (x screen height), orbit (x width, x height), speeds (1/s), phases
+                { s: 1.9, ax: 0.36, ay: 0.32, wx: 0.31, wy: 0.43, px: 0, py: 1.1, alpha: 0.95 },
+                { s: 1.7, ax: 0.40, ay: 0.36, wx: 0.23, wy: 0.37, px: 2.2, py: 0.3, alpha: 0.9 },
+                { s: 1.5, ax: 0.33, ay: 0.40, wx: 0.37, wy: 0.27, px: 4.1, py: 2.6, alpha: 0.85 },
+                { s: 1.35, ax: 0.42, ay: 0.30, wx: 0.27, wy: 0.33, px: 5.3, py: 4.4, alpha: 0.8 },
+            ];
+            function flow(cv, a, t, fullH) {
+                // the base: the blurred cover, larger than the screen, drifting slowly the other way
+                const base = (id, sc, ph) => {
+                    const bw = W * sc, bh = (fullH + 2 * OVER) * sc;
+                    cv.image(id, (W - bw) / 2 + Math.sin(t * 0.11 + ph) * 0.1 * W, (fullH - bh) / 2 + Math.cos(t * 0.09 + ph) * 0.1 * fullH, bw, bh);
+                };
+                base(BG_ID, 1.35, 0);
+                cv.alpha(0.45); base(BG2_ID, 1.5, 2); cv.alpha(1);
+                BLOBS.forEach((b, i) => {
+                    if (i >= a.blobs.length) return;
+                    const size = fullH * b.s * (1 + 0.14 * Math.sin(t * 0.21 + b.px * 1.7));
+                    const cx = W / 2 + Math.sin(t * b.wx + b.px) * b.ax * W, cy = fullH / 2 + Math.sin(t * b.wy + b.py) * b.ay * fullH;
+                    cv.alpha(b.alpha); cv.image(BLOB_ID + i, cx - size / 2, cy - size / 2, size, size);
+                });
+                cv.alpha(1);
+            }
             function backdrop(cv, a, now, P, fullH, x0) {
                 x0 = x0 || 0;      // < 0: the copy for BMW's back column (bgEdge), so its plain fills start there too
                 if (a) {
                     // two blurred layers of the cover drifting past each other, slowly, as Apple Music's background flows
-                    // Settings > Background motion: still (default) or a slow drift, as Apple Music's
-                    const d = settings.get('bg_motion') === 'drift' && cur && cur.playing ? now / 1000 : 0;
+                    // Settings > Background motion: still (default), a gentle drift, or Flow (the cover's colours swirling, below)
+                    const motion = settings.get('bg_motion') || 'still', d = motion === 'drift' ? flowClock(now) : 0;
+                    if (motion === 'flow' && a.blobs && cv.pictures !== 'opaque') { flow(cv, a, flowClock(now), fullH); return dimming(cv, fullH, x0); }
                     // drift: each layer wanders ~14 % of the screen and breathes (zooms 6 % in and out) over 30-50 s, the
                     // two at different speeds, so the colours visibly flow (Nov 21: 7 % over ~1 min read as still)
                     const layer = (id, sc, fx, fy, ph) => {
@@ -304,6 +343,10 @@ mgu.run({
                     for (let r = 340; r > 20; r -= 16) cv.circle(300, 120, r, G.withAlpha(P.glow, 0.016));
                     for (let r = 300; r > 20; r -= 16) cv.circle(1300, fullH - 60, r, G.withAlpha(P.glow, 0.012));
                 }
+                dimming(cv, fullH, x0);
+            }
+            function dimming(cv, fullH, x0) {
+                x0 = x0 || 0;
                 // a little darker at the top and the bottom, as glass over the artwork
                 cv.gradientRect(x0, 0, W - x0, fullH, [[0, G.withAlpha('#000000', 0.3)], [0.45, G.withAlpha('#000000', 0)], [1, G.withAlpha('#000000', 0.4)]]);
                 // the screen reaches past the page at the top and bottom (full screen): the same dimming there, so those
