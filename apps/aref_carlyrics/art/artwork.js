@@ -36,6 +36,7 @@ const SKIP_MS = 4000;
 const CAR_WAIT_MS = 1200;      // a new song: give the car this long to name its own cover before asking iTunes         // ... unless the song before it played this long (not skipping): then at once
 const MISSING_MS = 600000;    // no match found: asked again after 10 min (a skip can send a half-changed title)
 const DISK_MAX = 300;         // covers kept on disk (opts.dir): a song played again shows at once, even offline
+const RAW_MAX_BYTES = 25e6;   // decoded covers kept too (.rgba next to the .jpg): a replay needs no JPEG decode (1-6 s on a busy head unit)
 
 /** Lower-case words only, for comparing names ("Lil' Uzi Vert" ~ "lil uzi vert"). */
 function norm(s) { return LyricsLib.fold(String(s || '')).toLowerCase().replace(/\(.*?\)|\[.*?\]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
@@ -264,13 +265,24 @@ class Artwork {
 
     async _load(track) {
         const fs = require('fs'), f = this._file(Artwork.key(track)), t0 = Date.now();
+        // decoded before: its pixels, no decode
+        if (f) {
+            try {
+                const px = fs.readFileSync(f.replace(/\.jpg$/, '.' + this.opts.px + '.rgba'));
+                if (px.length === this.opts.px * this.opts.px * 4) {
+                    const v = this.fromPixels(new Uint8Array(px.buffer, px.byteOffset, px.length));
+                    v.src = 'disk'; this.log.info('artwork: decoded cover from disk in ' + (Date.now() - t0) + ' ms');
+                    return v;
+                }
+            } catch (e) { /* not kept */ }
+        }
         // the car's own copy of the phone's artwork (offline; the file can come a moment after the metadata)
         const car = await this._fromCar(track, f);
         if (car) return car;
         // the homelab's pack keeps covers by title and artist only (no album): that file too
         const fAlt = this._file(norm(track.title) + '|' + norm(track.artist) + '|');
-        if (f && !fs.existsSync(f) && fAlt && fs.existsSync(fAlt)) { try { const v = this.fromJpeg(fs.readFileSync(fAlt)); v.src = 'disk'; this.log.info('artwork: from the pack in ' + (Date.now() - t0) + ' ms'); return v; } catch (e) { /* unreadable */ } }
-        if (f) { try { const buf = fs.readFileSync(f); const v = this.fromJpeg(buf); v.src = 'disk'; this.log.info('artwork: from disk in ' + (Date.now() - t0) + ' ms'); return v; } catch (e) { /* not cached */ } }
+        if (f && !fs.existsSync(f) && fAlt && fs.existsSync(fAlt)) { try { const v = this.fromJpeg(fs.readFileSync(fAlt), f); v.src = 'disk'; this.log.info('artwork: from the pack in ' + (Date.now() - t0) + ' ms'); return v; } catch (e) { /* unreadable */ } }
+        if (f) { try { const buf = fs.readFileSync(f); const v = this.fromJpeg(buf, f); v.src = 'disk'; this.log.info('artwork: from disk in ' + (Date.now() - t0) + ' ms'); return v; } catch (e) { /* not cached */ } }
         const term = [LyricsLib.baseTitle(track.title), String(track.artist || '').split(/,|&/)[0]].join(' ');
         const q = querystring.stringify({ term: term, media: 'music', entity: 'song', limit: 10 });
         const r = await this.request('GET', 'itunes.apple.com', '/search?' + q, { Accept: 'application/json' });
@@ -292,7 +304,7 @@ class Artwork {
         const t1 = Date.now(), u = url.parse(sized(best.artworkUrl100, this.opts.px));
         const img = await this.request('GET', u.hostname, u.path, {});
         if (img.status !== 200) throw new Error('artwork HTTP ' + img.status);
-        const t2 = Date.now(), v = this.fromJpeg(img.body);
+        const t2 = Date.now(), v = this.fromJpeg(img.body, f);
         v.src = 'itunes';
         if (f) this._save(f, img.body);
         this.log.info('artwork: ready in ' + (Date.now() - t0) + ' ms (search ' + (t1 - t0) + ', image ' + (t2 - t1) + ', decode ' + (Date.now() - t2) + ')');
@@ -321,7 +333,7 @@ class Artwork {
                 if (st.mtime.getTime() < since) { if (i === 7) this.log.info('artwork: the car\'s file is still the last song\'s'); throw Object.assign(new Error('stale'), { code: 'STALE' }); }
                 const buf = await new Promise((ok, no) => fs.readFile(file, (e, b) => (e ? no(e) : ok(b))));
                 if (buf.length > 100) {
-                    const v = this.fromJpeg(buf);
+                    const v = this.fromJpeg(buf, f);
                     v.src = 'car'; v.carPath = track.cover; v.carMtime = st.mtime.getTime();
                     if (f) this._save(f, buf);
                     this.log.info('artwork: from the car in ' + (Date.now() - t0) + ' ms');
@@ -345,10 +357,33 @@ class Artwork {
         } catch (e) { /* full disk: no cache */ }
     }
 
-    /** The entry made from JPEG bytes (also for tests). */
-    fromJpeg(buf) {
+    /** The entry made from JPEG bytes (also for tests); f: the song's cover file, to keep the decoded pixels beside. */
+    fromJpeg(buf, f) {
         const im = this.decode(buf, { useTArray: true, formatAsRGBA: true, maxResolutionInMP: 4, maxMemoryUsageInMB: 48 });
         const n = this.opts.px, sq = squareResample(im.data, im.width, im.height, n, Math.round(n * ART_R));
+        if (f) this._saveRaw(f, sq.px);
+        return this.fromPixels(sq.px, sq.avg);
+    }
+
+    /** The decoded pixels kept beside the song's .jpg (written in the background), the oldest let go past RAW_MAX_BYTES. */
+    _saveRaw(f, px) {
+        const fs = require('fs'), path = require('path'), out = f.replace(/\.jpg$/, '.' + this.opts.px + '.rgba');
+        fs.writeFile(out, Buffer.from(px.buffer, px.byteOffset, px.length), (err) => {
+            if (err) return;
+            try {
+                const all = fs.readdirSync(this.opts.dir).filter((n) => /\.rgba$/.test(n)).map((n) => { const st = fs.statSync(path.join(this.opts.dir, n)); return { n: n, t: st.mtimeMs, b: st.size }; })
+                    .sort((a, b) => b.t - a.t);
+                let sum = 0;
+                all.forEach((x) => { sum += x.b; if (sum > RAW_MAX_BYTES) fs.unlinkSync(path.join(this.opts.dir, x.n)); });
+            } catch (e) { /* next time */ }
+        });
+    }
+
+    /** The entry made from the cover's pixels (opts.px square, RGBA). */
+    fromPixels(px, avg) {
+        const n = this.opts.px;
+        if (!avg) { let r = 0, g = 0, b = 0, k = 0; for (let i = 0; i < px.length; i += 64) { r += px[i]; g += px[i + 1]; b += px[i + 2]; k++; } avg = [r / k, g / k, b / k].map(Math.round); }
+        const sq = { px: px, avg: avg };
         const e = { state: 'ready', at: Date.now(), cover: sq.px, n: n, tint: sq.avg };
         if (this.opts.blur) { e.blur = backdrop(sq.px, n, BG_W, BG_H); e.blur2 = backdrop(sq.px, n, BG_W, BG_H, true); e.blobs = blobs(sq.px, n); }
         return e;

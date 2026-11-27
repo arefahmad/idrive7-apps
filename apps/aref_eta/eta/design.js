@@ -21,8 +21,10 @@ class Design {
         this.ref = null; this.mtime = 0; this.loaded = false; this.shown = false; this.busy = false;
     }
 
+    /** The layer: made only once a design file is there and the setting is on (5.5 MB of the renderer's memory). */
     create() {
         if (!this.cr || this.ref) return;
+        if (!fs.existsSync(this.file)) return;
         try {
             this.ref = this.cr.image({ target: 'panel', klass: 'content', z: 2, x: 0, y: 0, w: W, h: H, iw: W, ih: H,
                 sampling: 'bilinear', fps: 1, visible: false });
@@ -31,6 +33,7 @@ class Design {
 
     /** on: Settings > Cluster design. Loads a new file, shows or hides the layer. */
     tick(on) {
+        if (!this.ref && on) this.create();
         if (!this.ref || this.busy) return;
         let st = null;
         try { st = fs.statSync(this.file); } catch (e) { /* no design yet */ }

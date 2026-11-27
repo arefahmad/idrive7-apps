@@ -173,11 +173,11 @@ class Strip {
             // a blurred copy under it: the strip arrives and leaves blurred, squeezing and widening (springIn / springOut)
             this.blurRef = cr.image({ target: 'panel', klass: 'content', z: 19, x: r.x, y: r.y, w: r.w, h: r.h, iw: IW / 4, ih: IH / 4,
                 sampling: 'bilinear', fps: 2, visible: false });
-            this.island = new ISL.Island(cr, this.note);
-            this.island.create(this.cfg.islandMap, IW, IH, 'map', this.style.look);
+            this._ensureIsland();      // only with the island preset: its four layers take the renderer's memory too
             this.slot = new SLOT.Slot(cr, this.fonts, this.note, this.cfg.slot3, this.cfg.bgFit);
             this.slot.create();
             this.design = new DESIGN.Design(cr, this.ctx.dataDir, this.note);     // Cluster Studio's whole-cluster picture, under all of it
+            // (its 1920 x 720 layer is made only when a design is there: design.js)
             this.design.create();
             cr.connect();
         } catch (e) {
@@ -317,8 +317,16 @@ class Strip {
         const first = this.styleKey === undefined;
         this.style = style; this.styleKey = k;
         this.note('style ' + k);
+        this._ensureIsland();
         if (this.island) this.island.setLook(style.look);
         if (!first) this.preview();
+    }
+
+    /** The island's layers, made the first time the island preset is on (not at all with the bottom strip). */
+    _ensureIsland() {
+        if (this.island || !this.cr || this.style.preset !== 'island') return;
+        this.island = new ISL.Island(this.cr, this.note);
+        this.island.create(this.cfg.islandMap, IW, IH, 'map', this.style.look);
     }
 
     /** Called on every route update and each second: route (route.js pick(), null: nothing to show), arrival text. */

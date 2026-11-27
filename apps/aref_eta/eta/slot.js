@@ -431,23 +431,30 @@ class Slot {
             const bg = music && c.music.bg ? c.music.bg : null;
             // a new song: the last backdrop stays until its cover is ready (no gap), then they cross-fade
             if (this.bg && bg && bg !== this.bgCover) {
-                const first = !this.bgCover || !this.bgShown;
                 this.bgCover = bg;
-                this._bgSwap(drawBackdrop(bg.px, bg.n, this.shape, this.look), first);
+                this.cr.pixels(this.bg, null, drawBackdrop(bg.px, bg.n, this.shape, this.look));
+                this.bgPending = true;              // (shown below, fading in)
             }
-            const bgShow = !!bg;      // with its cover only: never another song's backdrop under this song's names
-            if (this.bg && bgShow !== this.bgShown) { this.bgShown = bgShow; this.cr.set(this.bg, { visible: bgShow }); }
+            // with its cover only (never another song's backdrop under this song's names): it fades out while the next
+            // cover loads and fades in with it, instead of blinking off and on
+            const bgShow = !!bg;
+            if (this.bg && (bgShow !== this.bgShown || (bgShow && this.bgPending))) { this.bgShown = bgShow; this.bgPending = false; this._bgFade(bgShow); }
         } catch (e) { this.note('slot: ' + e.message); }
     }
 
-    /** New backdrop pixels: at once the first time (the layer fades in itself); else fade out, swap, fade in (~0.5 s). */
-    _bgSwap(px, first) {
+    /** The backdrop fades in (on) or out (off) over ~0.4 s in opacity steps (an image layer's opacity is set, not animated). */
+    _bgFade(on) {
         (this.bgTimers || []).forEach(clearTimeout);
         this.bgTimers = [];
         const at = (ms, fn) => this.bgTimers.push(setTimeout(() => { try { fn(); } catch (e) { /* next */ } }, ms));
-        // the cover and its backdrop change together, in the same frame (Nov 21: they must always match)
-        this.cr.pixels(this.bg, null, px);
-        if (first) this.cr.set(this.bg, { opacity: 1 });
+        const steps = [0.2, 0.45, 0.7, 0.9, 1];
+        if (on) {
+            this.cr.set(this.bg, { opacity: 0, visible: true });
+            steps.forEach((o, i) => at(80 * (i + 1), () => this.cr.set(this.bg, { opacity: o })));
+        } else {
+            [0.75, 0.5, 0.28, 0.1].forEach((o, i) => at(80 * i, () => this.cr.set(this.bg, { opacity: o })));
+            at(320, () => this.cr.set(this.bg, { visible: false, opacity: 0 }));
+        }
     }
 
     move(place, fit) {

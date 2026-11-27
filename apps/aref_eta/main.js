@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.25.0';
+const VERSION = (() => { try { return require('./kit/app-spec.json').version; } catch (e) { return 'dev'; } })();   // from the build (it said 1.25.0 on 1.26.0)
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -213,7 +213,7 @@ mgu.run({
                     np = new NP.NowPlaying(ctx.signals, log, NP_IFACES);
                     np.start().catch((e) => log.warn('nowplaying: ' + e.message));
                     const net = http.client(ctx.dataDir);
-                    artwork = new ART.Artwork((m, h, p, hd) => net.request(m, h, p, hd), log, undefined, { px: 300, blur: false, cache: 12, dir: path.join(ctx.dataDir, 'covers') });
+                    artwork = new ART.Artwork((m, h, p, hd) => net.request(m, h, p, hd), log, undefined, { px: 300, blur: false, cache: 6, dir: path.join(ctx.dataDir, 'covers') });
                 }
                 const t = kind === 'music' && np ? np.track() : null;
                 const cov = coverFor(t), c = SLOT.content(kind, car.data(), Date.now(), t, cov);
