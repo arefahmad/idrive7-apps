@@ -182,14 +182,54 @@ class Lyrics {
     async _lookup(track) {
         const fs = require('fs'), path = require('path');
         const f = this.dir ? path.join(this.dir, Lyrics.diskKey(track) + '.json') : null;
+        // the kept file, if it's this version of the song: a single, a radio edit or a video's version has the same
+        // name and other timings (Nov 27: 26 of 43 songs had another version's lyrics, 0.2 to 13 s off)
+        let disk = null, rec = null;
         if (f) {
-            try {
-                const v = entryOf(JSON.parse(fs.readFileSync(f, 'utf8')));
-                if (v.state !== 'none') { this.log.info('lyrics: ' + v.state + ' from disk'); return v; }
-            } catch (e) { /* not kept */ }
+            try { rec = JSON.parse(fs.readFileSync(f, 'utf8')); disk = entryOf(rec); if (disk.state === 'none') disk = null; } catch (e) { disk = null; }
         }
-        const v = await this._lookupNet(track);
-        return v;
+        const secs = Math.round((track.duration || 0) / 1000);
+        if (disk && (!secs || (rec.duration && Math.abs(rec.duration - secs) <= DURATION_SLACK))) {
+            this.log.info('lyrics: ' + disk.state + ' from disk'); return disk;
+        }
+        if (disk) {
+            // kept without its length (older files) or another length: LRCLIB's version for this length, if it has one
+            const exact = await this._exact(track).catch(() => null);
+            if (exact && exact.syncedLyrics && exact.syncedLyrics !== rec.syncedLyrics) {
+                this.log.info('lyrics: the kept file is another version (' + (rec.duration || '?') + ' s, the song ' + secs + ' s): LRCLIB\'s for this length');
+                this._keep(track, exact);
+                return entryOf(exact);
+            }
+            if (exact && rec && !rec.duration) this._keep(track, Object.assign({}, rec, { duration: exact.duration }));   // checked: it is this version
+            this.log.info('lyrics: ' + disk.state + ' from disk');
+            return disk;
+        }
+        return this._lookupNet(track);
+    }
+
+    /** LRCLIB's record for exactly this song and length (its /api/get, 2 s either way), or null. */
+    async _exact(track) {
+        const secs = Math.round((track.duration || 0) / 1000);
+        if (!secs) return null;
+        const titles = [track.title].concat(baseTitle(track.title) !== track.title ? [baseTitle(track.title)] : []);
+        for (const t of titles) {
+            for (const album of track.album ? [track.album, ''] : ['']) {
+                const q = { track_name: t, artist_name: mainArtist(track), duration: secs };
+                if (album) q.album_name = album;
+                try { const r = await this._json('/api/get?' + querystring.stringify(q)); if (r && (r.syncedLyrics || r.plainLyrics)) return r; } catch (e) { if (!(e.status >= 500)) throw e; }
+            }
+        }
+        return null;
+    }
+
+    /** the record kept on disk (with its length, so the next play knows which version it is) */
+    _keep(track, rec) {
+        if (!this.dir || !rec) return;
+        try {
+            const keep = { trackName: rec.trackName, artistName: rec.artistName, duration: rec.duration || null, syncedLyrics: rec.syncedLyrics || null, plainLyrics: rec.plainLyrics || null, instrumental: !!rec.instrumental };
+            ['translation', 'romanization', 'translationLanguage', 'translatedFrom', 'wordTimes'].forEach((k) => { if (rec[k] !== undefined && rec.syncedLyrics) keep[k] = rec[k]; });
+            require('fs').writeFileSync(require('path').join(this.dir, Lyrics.diskKey(track) + '.json'), JSON.stringify(keep));
+        } catch (e) { /* full disk: online only */ }
     }
 
     async _lookupNet(track) {
@@ -213,10 +253,7 @@ class Lyrics {
         const v = entryOf(rec);
         this.log.info('lyrics: ' + v.state + (v.lines ? ' (' + v.lines.length + ' lines)' : ''));
         if (this.dir && rec && (rec.syncedLyrics || rec.plainLyrics || rec.instrumental)) {
-            try {
-                require('fs').writeFileSync(require('path').join(this.dir, Lyrics.diskKey(track) + '.json'),
-                    JSON.stringify({ trackName: rec.trackName, artistName: rec.artistName, syncedLyrics: rec.syncedLyrics || null, plainLyrics: rec.plainLyrics || null, instrumental: !!rec.instrumental }));
-            } catch (e) { /* full disk: online only */ }
+            this._keep(track, rec);
         }
         return v;
     }

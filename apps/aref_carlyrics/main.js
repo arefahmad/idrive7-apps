@@ -147,11 +147,18 @@ mgu.run({
                 if (!t) return;
                 const key = t.title + '|' + t.artist;
                 if (!cur || cur.key !== key) {
-                    cur = { key: key, title: t.title, artist: t.artist, album: t.album, duration: t.duration || 0, playing: true };
+                    // the length the car sends with a new title is often still the last song's (Makrehtosh came as 171 s
+                    // after a 171 s song, 221 s after a 224 s one; it is 214 s): it counts once it differs from the last
+                    // song's or comes with this song's first time update (below)
+                    const last = cur ? cur.duration : 0;
+                    cur = { key: key, title: t.title, artist: t.artist, album: t.album, duration: t.duration && t.duration !== last ? t.duration : 0, playing: true, since: Date.now(), lastLen: last };
                     clk = null; startAt = Date.now();
                     log.info('track: "' + t.title + '" by "' + t.artist + '" on "' + (t.album || '') + '" (' + Math.round((t.duration || 0) / 1000) + ' s) from ' + t.from);
                 }
-                if (t.duration) cur.duration = t.duration;
+                if (t.duration && t.duration !== cur.duration) {
+                    const fresh = t.duration !== cur.lastLen || (t.position != null && t.position < 20000 && (t.positionAt || Date.now()) > cur.since);
+                    if (fresh) cur.duration = t.duration;
+                }
                 if (t.album) cur.album = t.album;
                 if (t.cover) cur.cover = t.cover;
                 const playing = t.direct ? !!t.playing : true;
@@ -167,6 +174,9 @@ mgu.run({
                 clk.at = at; clk.playing = playing; clk.last = t.position;
             };
             np.onChange(guard('change', follow));
+            // the song's lyrics: looked up once its real length is known (it picks LRCLIB's version), or after 3 s without one
+            const lyricsNow = () => (!cur.duration && Date.now() - (cur.since || 0) < 3000 ? { state: 'loading' }
+                : lyrics.get({ title: cur.title, artist: cur.artist, album: cur.album, duration: cur.duration }));
             const offset = () => Number(settings.get('offset')) || 0;
             const position = (now) => (clk ? clockAt(now || Date.now()) : (now || Date.now()) - startAt) + offset();
             const sync = () => { startAt = Date.now(); say('Synced: the song starts now'); };
@@ -653,7 +663,7 @@ mgu.run({
                     const P = nameColours(cur.title + cur.artist), a = artFor(), Q = sideOn() ? geo(A) : geoGlass(A);
                     setBack(a, P, now); backdropX(cv, now, fullH); if (cv.bgEdge) cv.bgEdge(() => backdropX(cv, now, fullH, -300)); sideBand(a, P); hmiBg(a, P);
                     if (Q.glass) glassChrome(cv, Q, a, P, now); else { coverColumn(cv, Q, a, P, now); moreButton(cv, A); }
-                    const lyr = lyrics.get({ title: cur.title, artist: cur.artist, album: cur.album, duration: cur.duration });
+                    const lyr = lyricsNow();
                     if (settings.get('translation') !== 'off') translator.want(cur, lyr, net.online());
                     // new lyrics (or a message in their place): they fade in
                     const lk = lyr.state === 'loading' || lyr.state === 'none' ? lyr.state + '|' + cur.title + '|' + cur.artist : lyr;   // (a new 'loading' object each frame)
@@ -684,7 +694,7 @@ mgu.run({
             /* ---------- home-screen widget: the song and the line playing ---------- */
             HW.start(ctx, () => {
                 if (!cur) return { label: 'Car Lyrics', value: 'Nothing playing', sub: 'Play a song on your phone', small: ['Car Lyrics', 'Nothing playing'] };
-                const lyr = lyrics.get({ title: cur.title, artist: cur.artist, album: cur.album, duration: cur.duration });
+                const lyr = lyricsNow();
                 let line = '';
                 if (lyr.state === 'synced') { const i = LyricsLib.lineAt(lyr.lines, position() + LEAD_MS); line = i >= 0 ? lyr.lines[i].text : ''; }
                 return { label: 'Now playing', value: cur.title, sub: line || cur.artist, sub2: line ? cur.artist : '',
