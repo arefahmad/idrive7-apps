@@ -89,8 +89,10 @@ class Translator {
             const rec = JSON.parse(fs.readFileSync(path.join(this.lyricsDir, this.diskKey(track) + '.json'), 'utf8'));
             if (!rec || !(rec.translation && Object.keys(rec.translation).length) && !(rec.romanization && Object.keys(rec.romanization).length)) return false;
             const n = this._apply(entry, { translation: rec.translation, romanization: rec.romanization });
-            this.log.info('translate: "' + track.title + '" from its file (' + n + ' lines)');
-            return n > 0 || Object.keys(rec.romanization || {}).length > 0;
+            const ro = entry.lines.filter((l) => l.ro).length;
+            this.log.info('translate: "' + track.title + '" from its file (' + n + ' lines, ' + ro + ' pronounced)');
+            // a file whose translation is for another version (other line times) matches no line: asked for live instead
+            return n > 0 || ro > 0;
         } catch (e) { return false; }
     }
 
@@ -115,7 +117,7 @@ class Translator {
             const f = path.join(this.lyricsDir, this.diskKey(track) + '.json');
             const rec = JSON.parse(fs.readFileSync(f, 'utf8'));
             rec.translation = r.translation || {}; rec.romanization = r.romanization || {}; rec.translationLanguage = r.language || '';
-            fs.writeFileSync(f + '.tmp', JSON.stringify(rec)); fs.renameSync(f + '.tmp', f);
+            fs.writeFileSync(f + '.tmp', JSON.stringify(rec)); fs.renameSync(f + '.tmp', f);   // (renamed over: works on a read-only copy too)
         } catch (e) { this.log.warn('translate: not saved: ' + e.message); }
     }
 }

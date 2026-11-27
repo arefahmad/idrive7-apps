@@ -543,16 +543,20 @@ function wireSettings(ctx) {
     const values = (s) => (s.type === 'choice' ? (s.options || []).map((o) => o[0]) : s.type === 'number' ? s.steps || [] : null);
     // BMW-style pages (app.json "settingsPages"): Settings lists them, each row with its values underneath
     const pages = (SPEC.settingsPages || []).filter((pg) => ui.comp('SETPAGE_' + String(pg[0]).toUpperCase()));
-    const summary = (keys) => keys.map((k) => { const s = schema.find((x) => x.key === k); if (!s) return null;
-        return s.type === 'bool' ? (settings.get(k) ? s.short || s.label.split(/[(:]/)[0].trim() : null) : settings.display(k); }).filter(Boolean).join(' · ');
-    const refreshPages = () => Promise.all(pages.map((pg) => ui.cells('SETPAGE_' + String(pg[0]).toUpperCase(), 0, { Text1stRow: pg[1], Text2ndRow: summary(pg[2]) })));
+    // plain ASCII: these rows are plain-text cells; text with other characters goes as a string id, which the HMI
+    // refuses for them (INVALID_MODELID), and the refused update then blocks every later one (Settings didn't open,
+    // BMW's bar came back: Car Lyrics 0.13.0, Nov 27, a '·' between the values)
+    const ascii = (x) => String(x).replace(/[\u00b7\u2022]/g, ',').replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[^\x20-\x7e]/g, '');
+    const summary = (keys) => ascii(keys.map((k) => { const s = schema.find((x) => x.key === k); if (!s) return null;
+        return s.type === 'bool' ? (settings.get(k) ? s.short || s.label.split(/[(:]/)[0].trim() : null) : settings.display(k); }).filter(Boolean).join(', '));
+    const refreshPages = () => Promise.all(pages.map((pg) => ui.cells('SETPAGE_' + String(pg[0]).toUpperCase(), 0, { Text1stRow: ascii(pg[1]), Text2ndRow: summary(pg[2]) })));
     pages.forEach((pg) => ui.onClick('SETPAGE_' + String(pg[0]).toUpperCase(), () => refresh().then(() => ui.open('SETTINGS_' + String(pg[0]).toUpperCase()))));
     const refresh = () => Promise.all([refreshPages()].concat(schema.map((s) => {
         const comp = 'SET_' + s.key.toUpperCase();
         if (s.type === 'bool') return Promise.all([ui.text(comp, s.label), ui.checked(comp, !!settings.get(s.key))]);
         if (values(s)) return ui.selected(comp, Math.max(0, values(s).indexOf(settings.get(s.key))));
         // other types: two-row buttons in the wide settings state, label above, value below
-        return ui.cells(comp, 0, { Text1stRow: s.label, Text2ndRow: settings.display(s.key) });
+        return ui.cells(comp, 0, { Text1stRow: ascii(s.label), Text2ndRow: ascii(settings.display(s.key)) });
     })));
     schema.forEach((s) => {
         const comp = 'SET_' + s.key.toUpperCase();

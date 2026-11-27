@@ -228,8 +228,11 @@ class Lyrics {
         try {
             const keep = { trackName: rec.trackName, artistName: rec.artistName, duration: rec.duration || null, syncedLyrics: rec.syncedLyrics || null, plainLyrics: rec.plainLyrics || null, instrumental: !!rec.instrumental };
             ['translation', 'romanization', 'translationLanguage', 'translatedFrom', 'wordTimes'].forEach((k) => { if (rec[k] !== undefined && rec.syncedLyrics) keep[k] = rec[k]; });
-            require('fs').writeFileSync(require('path').join(this.dir, Lyrics.diskKey(track) + '.json'), JSON.stringify(keep));
-        } catch (e) { /* full disk: online only */ }
+            // a new file renamed over the old: it works even where the old one can't be written (a copy from the homelab)
+            const f = require('path').join(this.dir, Lyrics.diskKey(track) + '.json'), tmp = f + '.' + process.pid + '.tmp';
+            require('fs').writeFileSync(tmp, JSON.stringify(keep));
+            require('fs').renameSync(tmp, f);
+        } catch (e) { this.log.warn('lyrics: not kept: ' + (e.code || e.message)); }
     }
 
     async _lookupNet(track) {
