@@ -124,7 +124,7 @@ class Recorder {
     /** logical px the screen has below the app's page (display.js), 0 if none */
     get extra() { if (this._extra) this.extraUsed = true; return this._extra; }
     set extra(v) { this._extra = v || 0; }
-    reset() { this.n = 0; this.bleeds = []; this._bgAt = -1; this._bgBad = false; this._cnStamped = false; this.targets = []; this.scroll = false; this.extraUsed = false; if (this.layersUsed) this.layersUsed.clear(); this.atlases.clear(); this.ramps.clear(); this.images.clear(); return this; }
+    reset() { this.master = 1; this.n = 0; this.bleeds = []; this._bgAt = -1; this._bgBad = false; this._cnStamped = false; this.targets = []; this.scroll = false; this.extraUsed = false; if (this.layersUsed) this.layersUsed.clear(); this.atlases.clear(); this.ramps.clear(); this.images.clear(); return this; }
     _grow(k) {
         if (this.n + k <= this.u.length) return;
         let len = this.u.length * 2;
@@ -280,7 +280,12 @@ class Recorder {
         this.n = i; return this;
     }
     /** Global opacity (0..1) for what follows; 1 to end. */
-    alpha(a) { this._grow(2); this.u[this.n++] = OP.ALPHA; this.f[this.n++] = a; return this; }
+    alpha(a) { this._grow(2); this.u[this.n++] = OP.ALPHA; this.f[this.n++] = a * (this.master === undefined ? 1 : this.master); return this; }
+    /**
+     * Everything drawn after this is faded to m (0-1), on top of each alpha() the drawing sets itself: a whole part of
+     * the page (or all of it: the display's fade-in) fades without the drawing code knowing. fade() reads the level.
+     */
+    fade(m) { if (m === undefined) return this.master === undefined ? 1 : this.master; this.master = Math.max(0, Math.min(1, m)); return this.alpha(1); }
     /**
      * Transform for what follows: device px = v * s + (ox, oy); xf() = back to the placement's.
      * Used by the display for the screen chrome (header, menu bar) drawn in screen pixels.

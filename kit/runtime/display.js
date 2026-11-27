@@ -83,6 +83,8 @@ const FULL = {
 };
 const LAYOUTS = ['full', 'standard'];
 
+const SETTLE_MS = 300, FADE_IN_MS = 350;   // coming back after a pop-up or the reverse camera: wait, then fade in
+
 class Display {
     constructor(ui, log, spec, settings, themeFn) {
         this.ui = ui; this.log = log; this.spec = spec; this.settings = settings; this.theme = themeFn;
@@ -603,12 +605,39 @@ class Display {
         return this.ui.isVisible(this.screen.name) && !this.ui.isVisible('SETTINGS') && (!this.ui.hasFocus || this.ui.hasFocus(this.screen.name));
     }
 
+    /**
+     * Shown or hidden as the HMI says. Hiding is at once (the reverse camera, a call, a warning must come up straight
+     * away). Coming back after being hidden waits until the screen has stayed ours for SETTLE_MS (the HMI flips focus
+     * a few times as the camera goes: shown, hidden, shown inside 30 ms looked like a glitch), then the page fades in
+     * over FADE_IN_MS (canvas(): the recorder's fade level) instead of cutting in.
+     */
     _syncVisible() {
         if (!this.gpu) return;
-        const on = this._shown();
-        if (on && !this.gpu.visible) { this.shownT = Date.now(); this.softDone = false; }
-        this.gpu.show(on);
-        if (on) this.lastWords = null;
+        const on = this._shown(), now = Date.now();
+        if (!on) {
+            clearTimeout(this.settleTimer); this.settleTimer = null;
+            if (this.gpu.visible) this.hiddenT = now;
+            this.gpu.show(false);
+            return;
+        }
+        if (this.gpu.visible) { this.gpu.show(true); return; }
+        const wait = this.hiddenT && now - this.hiddenT < 5000 ? SETTLE_MS : 0;
+        if (wait && !this.settleTimer) {
+            this.settleTimer = setTimeout(() => { this.settleTimer = null; if (this._shown()) this._showNow(); }, wait);
+            return;
+        }
+        if (!wait) this._showNow();
+    }
+    _showNow() {
+        if (!this.gpu || this.gpu.visible) return;
+        this.shownT = this.fadeT = Date.now(); this.softDone = false;
+        this.lastWords = null;
+        this.gpu.show(true);
+    }
+    /** the page's fade-in level just after it came back (1 = done) */
+    fadeLevel() {
+        const t = (Date.now() - (this.fadeT || 0)) / FADE_IN_MS;
+        return t >= 1 ? 1 : 1 - Math.pow(1 - Math.max(0, t), 2);
     }
 
     /** GPU path usable for this screen right now? */
@@ -623,6 +652,7 @@ class Display {
         let r = this.recorders.get(key);
         if (!r) { r = new Recorder(w, h, { textScale: scale }); this.recorders.set(key, r); }
         r.reset();
+        if (this.active() && this.fadeLevel() < 1) r.fade(this.fadeLevel());   // just came back: the whole page fades in
         r.tabRects = null;
         // full-screen layout: G.frame hands its tabs to the header instead of drawing them
         r.chrome = this.active() && this.place.full && this.screen.chrome !== false ? { tabs: null } : null;

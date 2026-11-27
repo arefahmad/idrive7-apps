@@ -71,6 +71,10 @@ The track comes from BMW's `MediaPlayer` interface (CarPlay is its instance `Car
 **Save report** writes all of it to `carlyrics-probe.txt` in the app's data folder; it is also written
 every minute. A report from a car playing Apple Music tells the next version exactly which field to use.
 
+## Translations
+
+Songs that aren't in English can show their meaning in English under each line, and the pronunciation in Latin letters (Settings → Lyrics → Translation). The translations come from the app owner's own server: it needs a `translate.json` (server address and key) in the app's data folder, which only that server puts there. **Without it, nothing is sent anywhere and no translation shows**: an install from the Store doesn't use anyone else's server or AI. A lyrics file that already has `translation` / `romanization` (for example one copied over by your own server) still shows them.
+
 ## Safety
 
 Read-only toward the car: it subscribes to and reads fields, and never calls a method or writes a value. It

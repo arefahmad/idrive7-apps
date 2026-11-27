@@ -83,7 +83,7 @@ class Translator {
         let n = 0, changed = false;
         entry.lines.forEach((l) => {
             const k = String(l.t);
-            if (tr[k] && l.tr !== tr[k]) { l.tr = tr[k]; changed = true; }
+            if (tr[k] && l.tr !== tr[k]) { if (!l.tr) l.trAt = Date.now(); l.tr = tr[k]; changed = true; }   // trAt: it fades in
             if (ro[k] && l.ro !== ro[k]) { l.ro = ro[k]; changed = true; }
             if (l.tr) n++;
         });

@@ -63,10 +63,20 @@ const isLtr = (c) => (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a) || (c 
     (c >= 0x660 && c <= 0x669);
 const MIRROR = { 0x28: 0x29, 0x29: 0x28, 0x5b: 0x5d, 0x5d: 0x5b, 0x7b: 0x7d, 0x7d: 0x7b, 0x3c: 0x3e, 0x3e: 0x3c };
 
-/** The string to draw left to right. */
+/** The string to draw left to right. Remembered: a lyrics screen draws the same lines every frame (shaping them
+ * each time took about a third of a frame on the head unit). */
+const memo = new Map(), MEMO_MAX = 600;
 function visual(s) {
     s = String(s);
     if (!has(s)) return s;
+    const hit = memo.get(s);
+    if (hit !== undefined) return hit;
+    const out = visualNow(s);
+    if (memo.size >= MEMO_MAX) memo.delete(memo.keys().next().value);
+    memo.set(s, out);
+    return out;
+}
+function visualNow(s) {
     const cps = shape(s);
     const first = cps.find((c) => isAr(c) || isLtr(c));
     const rtl = first === undefined || isAr(first);
