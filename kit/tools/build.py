@@ -25,7 +25,7 @@ An app's folder (apps/<id>/) and where its files go in the package (source/javas
     data/<folder>/          a data folder: packed into <folder>.pack (pack_data.py), read with
                             kit/runtime/pack.js; a committed data/<folder>.pack is copied as it is
 """
-import json, os, re, shutil, sys, tarfile, uuid
+import json, os, re, shutil, subprocess, sys, tarfile, uuid
 from xml.sax.saxutils import escape
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pack_data  # noqa: E402
@@ -793,6 +793,20 @@ def main():
     parser.add_argument('apps', nargs='*')
     args = parser.parse_args()
     ids = args.apps or sorted(d for d in os.listdir(APPS) if os.path.exists(os.path.join(APPS, d, 'app.json')))
+    # an app built on cauliflowermossgrape's newer kit (app.json "kit": "kit-cmg"): his build, from kit-cmg/
+    mine = []
+    for i in ids:
+        try:
+            k = json.load(open(os.path.join(APPS, i, 'app.json'), encoding='utf-8')).get('kit')
+        except (OSError, ValueError):
+            k = None
+        if k:
+            r = subprocess.run([sys.executable, os.path.join(ROOT, k, 'tools', 'build.py')] + ([] if args.language == 'en' else ['--language', args.language]) + [i])
+            if r.returncode:
+                sys.exit(r.returncode)
+        else:
+            mine.append(i)
+    ids = mine
     for i in ids:
         build(i, args.language)
 

@@ -1,0 +1,454 @@
+{
+  "id": "aref_ambient",
+  "title": "Cabin Light",
+  "description": "Aref's ambient lighting: any colour, animations, a look for each driving mode, door and turn-signal lights, and Music: the lights move with the song's beat (beat maps from the owner's homelab).",
+  "version": "0.1.0",
+  "vendor": "aref",
+  "loggingId": "OAR9",
+  "iconGlyph": "ambient",
+  "mguHmi": [
+    "ID7",
+    "ID8"
+  ],
+  "requires": {
+    "idrive7-renderd": "2.1.18",
+    "mgu-inputgate": "1.1.0"
+  },
+  "signals": {
+    "de.bmw.infotainment.misc.ComfortFunctionIuK": {
+      "ambientLightInteriorColour": "w",
+      "statusAmbientLightInteriorColour": "rs"
+    },
+    "de.bmw.infotainment.drivingexcitement.FES": {
+      "_optional": "the driving mode: colours by mode",
+      "statusFESVehicleDynamicSwitchHMI": "rs"
+    },
+    "com.harman.infotainment.systemfunctions.tasu.tasu.InternalTasu": {
+      "_instances": "SystemFunctionsInternalTasuInst1",
+      "_methods": [
+        "sendTasuRequest"
+      ],
+      "_broadcasts": [
+        "sendTasuResponse"
+      ]
+    },
+    "de.bmw.infotainment.vehicle.Vehicle": {
+      "_optional": "day or night: dimmer at night",
+      "statusDayNightChangeOver": "rs"
+    },
+    "de.bmw.infrastructure.VehicleCondition": {
+      "_optional": "the car locked and left: the car's own light",
+      "VehicleCondition": "s",
+      "vehicleConditionNoCrc": "s"
+    },
+    "de.bmw.body.Light": {
+      "_optional": "the turn signals: that side's lights breathe green",
+      "StatusFunctionsIndicators": "s"
+    },
+    "de.bmw.body.DoorsWindowsRoofMirrors": {
+      "_optional": "an open door: its lights red",
+      "CentralLockingSystemAndPanelStatus": "s"
+    },
+    "de.bmw.infotainment.vehicle.Vehicle2": {
+      "_optional": "the car's speed: driven (for a car that does not say it is locked and left), and the light show only standing still",
+      "statusCarSpeed2": "rs",
+      "statusLightStatus": "rs"
+    },
+    "de.bmw.infotainment.a4a.carplay.CarPlayManager": "*",
+    "de.bmw.infotainment.entertainment.mediaplayer.MediaPlayer": "*",
+    "de.bmw.infotainment.hmi.hmimediastate.HmiMediaState": "*",
+    "de.bmw.infotainment.entertainment.dynamicmediaplayer.DynamicMediaPlayer": "*"
+  },
+  "screens": [
+    {
+      "name": "MAIN",
+      "kind": "canvas",
+      "title": "Cabin Light",
+      "buttons": [
+        [
+          "BTN_SETTINGS",
+          "Settings"
+        ]
+      ]
+    }
+  ],
+  "settings": [
+    {
+      "key": "music",
+      "label": "Music: the light moves with the beat",
+      "type": "choice",
+      "default": "pulse",
+      "options": [
+        [
+          "off",
+          "Off"
+        ],
+        [
+          "pulse",
+          "Pulse on the beat"
+        ],
+        [
+          "flash",
+          "Pulse driving, flash when parked"
+        ]
+      ]
+    },
+    {
+      "key": "carKind",
+      "label": "Car type",
+      "type": "choice",
+      "default": "ice",
+      "hidden": true,
+      "options": [
+        [
+          "ice",
+          "Petrol or diesel"
+        ],
+        [
+          "hybrid",
+          "Plug-in hybrid"
+        ]
+      ]
+    },
+    {
+      "key": "follow",
+      "label": "Look by driving mode",
+      "type": "bool",
+      "default": true,
+      "hidden": true
+    },
+    {
+      "key": "welcome",
+      "label": "Welcome sweep at start",
+      "type": "bool",
+      "default": false,
+      "hidden": true
+    },
+    {
+      "key": "sportPulse",
+      "label": "Sport pulse",
+      "type": "bool",
+      "default": false,
+      "hidden": true
+    },
+    {
+      "key": "decorWith",
+      "label": "Decor lights (dash, under the door trim) with",
+      "type": "choice",
+      "default": "upper",
+      "options": [
+        [
+          "upper",
+          "Upper lights"
+        ],
+        [
+          "lower",
+          "Lower lights (like BMW)"
+        ]
+      ]
+    },
+    {
+      "key": "nightDim",
+      "label": "Dimmer at night",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "dayOff",
+      "label": "Off by day (on when the car switches to night)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "keep",
+      "label": "My colour back at each start",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "flashAlerts",
+      "label": "Redline shift flash",
+      "type": "bool",
+      "default": true,
+      "hidden": true
+    },
+    {
+      "key": "turnGlow",
+      "label": "Turn signal glow",
+      "type": "bool",
+      "default": false,
+      "hidden": true
+    },
+    {
+      "key": "doorRed",
+      "label": "Open door red",
+      "type": "bool",
+      "default": false,
+      "hidden": true
+    },
+    {
+      "key": "doorCar",
+      "label": "Open door: the car's own warning (G20 / G26)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "blinkBoth",
+      "label": "Turn glow and door red on both strips of a door line (G26: slower blink)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "hazardRed",
+      "label": "Hazard red",
+      "type": "bool",
+      "default": false,
+      "hidden": true
+    },
+    {
+      "key": "strobe",
+      "label": "High beam strobe and light show (only for use on private property)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "stealth",
+      "label": "Stealth: headlights dark while parked (only for use on private property)",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "strobe": [
+          true
+        ]
+      }
+    },
+    {
+      "key": "stealthMin",
+      "label": "Stealth minutes",
+      "type": "choice",
+      "default": "5",
+      "hidden": true,
+      "options": [
+        [
+          "1",
+          "1 min"
+        ],
+        [
+          "5",
+          "5 min"
+        ],
+        [
+          "10",
+          "10 min"
+        ]
+      ]
+    },
+    {
+      "key": "strobeLeverDriving",
+      "label": "Lever start of the strobe also while driving (only for use on private property)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "strobeLights",
+      "label": "Strobe lights",
+      "type": "choice",
+      "default": "all",
+      "hidden": true,
+      "options": [
+        [
+          "all",
+          "All lights"
+        ],
+        [
+          "high",
+          "High beam"
+        ]
+      ]
+    },
+    {
+      "key": "strobeEvery",
+      "label": "Strobe flashes a second",
+      "type": "choice",
+      "default": "0",
+      "hidden": true,
+      "options": [
+        [
+          "0",
+          "Max"
+        ],
+        [
+          "250",
+          "4"
+        ],
+        [
+          "333",
+          "3"
+        ],
+        [
+          "500",
+          "2"
+        ],
+        [
+          "1000",
+          "1"
+        ]
+      ]
+    },
+    {
+      "key": "policeBurst",
+      "label": "Police flashes a burst",
+      "type": "choice",
+      "default": "4",
+      "hidden": true,
+      "options": [
+        [
+          "1",
+          "1"
+        ],
+        [
+          "2",
+          "2"
+        ],
+        [
+          "3",
+          "3"
+        ],
+        [
+          "4",
+          "4"
+        ]
+      ]
+    },
+    {
+      "key": "strobeFlashMs",
+      "label": "Strobe flash length",
+      "type": "choice",
+      "default": "80",
+      "hidden": true,
+      "options": [
+        [
+          "50",
+          "50 ms"
+        ],
+        [
+          "80",
+          "80 ms"
+        ],
+        [
+          "100",
+          "100 ms"
+        ],
+        [
+          "150",
+          "150 ms"
+        ]
+      ]
+    },
+    {
+      "key": "policeOrder",
+      "label": "Police order",
+      "type": "choice",
+      "default": "lbr",
+      "hidden": true,
+      "options": [
+        [
+          "lbr",
+          "Left, both, right"
+        ],
+        [
+          "lrb",
+          "Left, right, both"
+        ],
+        [
+          "lr",
+          "Left, right"
+        ]
+      ]
+    },
+    {
+      "key": "strobePattern",
+      "label": "Strobe pattern",
+      "type": "choice",
+      "default": "police",
+      "hidden": true,
+      "options": [
+        [
+          "police",
+          "Police"
+        ],
+        [
+          "both",
+          "Strobe"
+        ],
+        [
+          "alternate",
+          "In turn"
+        ]
+      ]
+    },
+    {
+      "key": "strobeLever",
+      "label": "Start the strobe with the flasher lever",
+      "type": "bool",
+      "default": false,
+      "hidden": true
+    },
+    {
+      "key": "strobeRate",
+      "label": "Strobe speed",
+      "type": "choice",
+      "default": "normal",
+      "hidden": true,
+      "options": [
+        [
+          "fast",
+          "Fast"
+        ],
+        [
+          "normal",
+          "Normal"
+        ],
+        [
+          "slow",
+          "Slow"
+        ]
+      ]
+    },
+    {
+      "key": "showRate",
+      "label": "Light show speed",
+      "type": "choice",
+      "default": "normal",
+      "hidden": true,
+      "options": [
+        [
+          "fast",
+          "Fast"
+        ],
+        [
+          "normal",
+          "Normal"
+        ]
+      ]
+    },
+    {
+      "key": "drive",
+      "label": "Steering wheel",
+      "type": "choice",
+      "default": "lhd",
+      "options": [
+        [
+          "lhd",
+          "Left"
+        ],
+        [
+          "rhd",
+          "Right"
+        ]
+      ]
+    }
+  ],
+  "kit": "kit-cmg",
+  "autostart": true
+}
