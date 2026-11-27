@@ -174,6 +174,10 @@ def build_ui(spec, language='en'):
     # a "menu" screen with "settings": true shows the settings itself: no separate settings screen
     if spec.get('settings') and not any(sc.get('settings') is True for sc in screens):
         screens.append({'name': 'SETTINGS', 'kind': 'settings', 'title': 'Settings'})
+        # "settingsPages": [[id, title, [keys]], ...]: BMW-style pages. Settings lists the pages (each row: the page,
+        # and its values below); each page is a settings list of its own, back goes to Settings
+        for pid, ptitle, keys in spec.get('settingsPages') or []:
+            screens.append({'name': 'SETTINGS_' + pid.upper(), 'kind': 'settings', 'title': ptitle, 'keys': keys, 'parentName': 'SETTINGS'})
     state_ids = {}
     for scr in screens:
         state_ids[scr['name']] = None
@@ -201,8 +205,19 @@ def build_ui(spec, language='en'):
         strings[s] = text
         return {cell: {'value': s, 'type': 'StringId'}}
 
-    def settings_items(items):
+    paged = {k for _, _, keys in (spec.get('settingsPages') or []) for k in keys}
+
+    def settings_items(items, keys=None, menu=False):
+        if menu and spec.get('settingsPages'):
+            for pid, ptitle, _ in spec['settingsPages']:
+                items.append(comp('tworow', 'SETPAGE_' + pid.upper(), rows=[{'Text1stRow': {'value': hmi_text(ptitle), 'type': 'Text'},
+                                                                             'Text2ndRow': {'value': '', 'type': 'Text'}}]))
         for s in spec['settings']:
+            # a page shows its own keys, in the page's order below; the main list shows those on no page
+            if keys is not None and s['key'] not in keys:
+                continue
+            if keys is None and s['key'] in paged:
+                continue
             name = 'SET_' + s['key'].upper()
             if s['type'] == 'bool':
                 items.append(comp('checkbox', name, rows=[text_row('SET_' + s['key'], s['label'])]))
@@ -222,6 +237,8 @@ def build_ui(spec, language='en'):
                 items.append(comp('tworow', name, rows=[{'Text1stRow': {'value': s['label'], 'type': 'Text'},
                                                         'Text2ndRow': {'value': '', 'type': 'Text'}}]))
         # Chinese builds only: credit for the Chinese translation (localize.py sets the Chinese title)
+        if keys is not None:
+            return
         if language == 'zh-CN':
             credit_title, credit_link = sid(app, 'CN_CREDITS_TITLE'), sid(app, 'CN_CREDITS_LINK')
             strings[credit_title], strings[credit_link] = zh_credit()['settingsTitle'], zh_credit()['settingsLink']
@@ -251,9 +268,10 @@ def build_ui(spec, language='en'):
         widget = 'LT_State_Laptimer' if kind == 'canvas' else 'LT_State_Wide' if kind in ('settings', 'menu') else 'LT_State_Regular_ContentHidden'
         cont = {'type': 'state', 'name': scr['name'], 'components': {}}
         x = [f'    <container id="{cid}" type="state" widget="{widget}">']
-        if main_id is not None and scr.get('parent', True):
-            x.append(f'        <property id="9" value="{main_id}"/>')
-            cont['properties'] = {'ParentState': {'value': main_id, 'type': 'UInt'}}
+        parent = state_ids.get(scr['parentName']) if scr.get('parentName') else main_id
+        if parent is not None and scr.get('parent', True):
+            x.append(f'        <property id="9" value="{parent}"/>')
+            cont['properties'] = {'ParentState': {'value': parent, 'type': 'UInt'}}
         groups = []
         if kind == 'canvas':
             items = []
@@ -268,7 +286,15 @@ def build_ui(spec, language='en'):
                 groups.append(('Bar', bar))
         elif kind == 'settings':
             items = []
-            settings_items(items)
+            if scr.get('keys') is not None:
+                # in the page's own order
+                order = {k: i for i, k in enumerate(scr['keys'])}
+                saved = spec['settings']
+                spec['settings'] = sorted([x for x in saved if x['key'] in order], key=lambda x: order[x['key']]) + [x for x in saved if x['key'] not in order]
+                settings_items(items, set(scr['keys']))
+                spec['settings'] = saved
+            else:
+                settings_items(items, None, True)
             groups.append(('List', items))
         else:   # list / menu: components from "items" (a menu adds the settings after them)
             items = []
@@ -285,7 +311,7 @@ def build_ui(spec, language='en'):
                     rows = [text_row(name, label)] if label else [{'Text': {'value': '', 'type': 'Text'}}]
                 items.append(comp(kindi, name, rows=rows))
             if kind == 'menu' and scr.get('settings'):
-                settings_items(items)
+                settings_items(items, None, True)
             groups.append(('List', items))
         tid = nid()
         groups.append(('Titlebar', [(tid, [f'            <component id="{tid}" type="title"/>'],

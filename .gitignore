@@ -2,3 +2,4 @@ dist/
 oap-sdk/
 node_modules/
 *.log
+__pycache__/

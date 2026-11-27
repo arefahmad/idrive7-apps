@@ -33,6 +33,7 @@ const NP = require('./nowplaying');
 const LyricsLib = require('./lyrics');
 const ART = require('./artwork');
 const http = require('./http');
+const TR = require('./translate');
 const HW = require('./kit/homewidget');
 
 const VERSION = '0.8.1';
@@ -112,6 +113,8 @@ mgu.run({
             const request = (m, h, p, hd) => net.request(m, h, p, hd);
             const lyrics = new LyricsLib.Lyrics(request, log, 'CarLyrics/' + VERSION + ' (iDrive 7 head-unit app; ' + HOMEPAGE + ')', path.join(ctx.dataDir, 'lyrics'));   // kept on disk: offline next time
             const artwork = new ART.Artwork(request, log, undefined, { dir: path.join(ctx.dataDir, 'covers') });   // covers kept on disk: replays show at once
+            // songs not in English: the homelab translates them live, lines arriving as they're written (stage/translate.js)
+            const translator = new TR.Translator((m, h, p, hd, b) => net.request(m, h, p, hd, b), log, ctx.dataDir, path.join(ctx.dataDir, 'lyrics'), LyricsLib.Lyrics.diskKey);
             const np = new NP.NowPlaying(ctx.signals, log, IFACES);
             // Inter (OFL), the open look-alike of Apple's SF Pro: data/fonts/, baked by tools/bake_fonts.py
             let F_BOLD = 'bold', F_MED = 'label';
@@ -288,7 +291,9 @@ mgu.run({
             let flowT = 0, flowAt = 0;
             function flowClock(now) {
                 const dt = flowAt ? Math.min(0.1, Math.max(0, (now - flowAt) / 1000)) : 0;
-                if (now !== flowAt) { if (cur && cur.playing) flowT += dt; flowAt = now; }
+                // Settings > Background > Speed
+                const k = ({ slow: 0.5, normal: 1, fast: 1.7, faster: 2.6 })[settings.get('bg_speed')] || 1;
+                if (now !== flowAt) { if (cur && cur.playing) flowT += dt * k; flowAt = now; }
                 return flowT;
             }
             /**
@@ -394,7 +399,7 @@ mgu.run({
             let laid = null;          // { lines, w, blocks: [{ rows, top, h, gap }] }
             function layout(cv, lines, w) {
                 const mode = settings.get('translation') || 'en';
-                if (laid && laid.lines === lines && laid.w === w && laid.size === LYR.size && laid.mode === mode) return laid;
+                if (laid && laid.lines === lines && laid.w === w && laid.size === LYR.size && laid.mode === mode && laid.trv === translator.ver) return laid;
                 const opt = { font: F_BOLD, literal: true }, sopt = { font: F_MED, literal: true }, blocks = [];
                 const SUB = subSize();
                 let y = 0;
@@ -409,7 +414,7 @@ mgu.run({
                     blocks.push({ rows: rows, subs: subs, top: y, h: h });
                     y += h + LYR.gap;
                 });
-                laid = { lines: lines, w: w, blocks: blocks, size: LYR.size, mode: mode };
+                laid = { lines: lines, w: w, blocks: blocks, size: LYR.size, mode: mode, trv: translator.ver };
                 return laid;
             }
             /** The translation under a line: a little over half the lyrics' size, in the medium weight. */
@@ -591,6 +596,7 @@ mgu.run({
                     backdrop(cv, a, now, P, fullH); if (cv.bgEdge) cv.bgEdge(() => backdrop(cv, a, now, P, fullH, -300)); sideBand(a, P); hmiBg(a, P);
                     if (Q.glass) glassChrome(cv, Q, a, P, now); else { coverColumn(cv, Q, a, P, now); moreButton(cv, A); }
                     const lyr = lyrics.get({ title: cur.title, artist: cur.artist, album: cur.album, duration: cur.duration });
+                    if (settings.get('translation') !== 'off') translator.want(cur, lyr, net.online());
                     if (lyr.state === 'synced' && lyr.lines.length) drawSynced(cv, Q, lyr.lines, now);
                     else if (lyr.state === 'plain') drawPlain(cv, Q, lyr.text);
                     else if (lyr.state === 'loading') message(cv, Q, 'Finding the lyrics...', '');

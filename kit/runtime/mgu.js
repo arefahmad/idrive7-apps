@@ -541,13 +541,19 @@ function wireSettings(ctx) {
     if (!schema.length || !schema.some((s) => ui.comp('SET_' + s.key.toUpperCase()))) return;
     // choice / number settings are drop-downs (kit/tools/build.py): their rows are the values in this order
     const values = (s) => (s.type === 'choice' ? (s.options || []).map((o) => o[0]) : s.type === 'number' ? s.steps || [] : null);
-    const refresh = () => Promise.all(schema.map((s) => {
+    // BMW-style pages (app.json "settingsPages"): Settings lists them, each row with its values underneath
+    const pages = (SPEC.settingsPages || []).filter((pg) => ui.comp('SETPAGE_' + String(pg[0]).toUpperCase()));
+    const summary = (keys) => keys.map((k) => { const s = schema.find((x) => x.key === k); if (!s) return null;
+        return s.type === 'bool' ? (settings.get(k) ? s.short || s.label.split(/[(:]/)[0].trim() : null) : settings.display(k); }).filter(Boolean).join(' · ');
+    const refreshPages = () => Promise.all(pages.map((pg) => ui.cells('SETPAGE_' + String(pg[0]).toUpperCase(), 0, { Text1stRow: pg[1], Text2ndRow: summary(pg[2]) })));
+    pages.forEach((pg) => ui.onClick('SETPAGE_' + String(pg[0]).toUpperCase(), () => refresh().then(() => ui.open('SETTINGS_' + String(pg[0]).toUpperCase()))));
+    const refresh = () => Promise.all([refreshPages()].concat(schema.map((s) => {
         const comp = 'SET_' + s.key.toUpperCase();
         if (s.type === 'bool') return Promise.all([ui.text(comp, s.label), ui.checked(comp, !!settings.get(s.key))]);
         if (values(s)) return ui.selected(comp, Math.max(0, values(s).indexOf(settings.get(s.key))));
         // other types: two-row buttons in the wide settings state, label above, value below
         return ui.cells(comp, 0, { Text1stRow: s.label, Text2ndRow: settings.display(s.key) });
-    }));
+    })));
     schema.forEach((s) => {
         const comp = 'SET_' + s.key.toUpperCase();
         if (values(s)) {
@@ -565,6 +571,8 @@ function wireSettings(ctx) {
         ui.onClick('BTN_SETTINGS', () => {
             const d = ctx.display;
             if (d.sheet && d.sheet.settings) { d.closeSheet(); return null; }
+            // "settingsMenu": "hmi" in app.json: always BMW's own settings screens, never the drawn sheet
+            if (SPEC.settingsMenu === 'hmi') return refresh().then(() => ui.open('SETTINGS'));
             const sh = listSheet(settings, null, { version: SPEC.version });
             sh.settings = true;
             sh.onClose = () => refresh();

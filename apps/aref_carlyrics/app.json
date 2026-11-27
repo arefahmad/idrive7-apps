@@ -2,7 +2,7 @@
   "id": "aref_carlyrics",
   "title": "Car Lyrics",
   "description": "Synced lyrics for whatever the car plays: Apple Music over CarPlay, Bluetooth or USB, no Spotify needed. A full-screen page drawn like Apple Music's: the album art blurred behind, the cover and a progress line on the left, and the lyrics gliding line by line on the right, timed to the song from the car's own clock. Lyrics from LRCLIB, artwork from Apple's iTunes search. A Probe tab shows what the car reports. Read-only toward the car. Needs internet through the Store's uplink.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "vendor": "aref",
   "loggingId": "OAR1",
   "internet": true,
@@ -141,7 +141,7 @@
     },
     {
       "key": "bg_motion",
-      "label": "Background motion",
+      "label": "Motion",
       "type": "choice",
       "default": "still",
       "options": [
@@ -156,6 +156,30 @@
         [
           "flow",
           "Flow (like Apple Music)"
+        ]
+      ]
+    },
+    {
+      "key": "bg_speed",
+      "label": "Speed",
+      "type": "choice",
+      "default": "normal",
+      "options": [
+        [
+          "slow",
+          "Slow"
+        ],
+        [
+          "normal",
+          "Normal"
+        ],
+        [
+          "fast",
+          "Fast"
+        ],
+        [
+          "faster",
+          "Very fast"
         ]
       ]
     },
@@ -181,7 +205,7 @@
     },
     {
       "key": "lyrics_size",
-      "label": "Lyrics size",
+      "label": "Text size",
       "type": "choice",
       "default": "medium",
       "options": [
@@ -205,9 +229,10 @@
     },
     {
       "key": "word_highlight",
-      "label": "Light up the words as they're sung (like Apple Music)",
+      "label": "Light up the words as they're sung",
       "type": "bool",
-      "default": true
+      "default": true,
+      "short": "Words light up"
     },
     {
       "key": "translation",
@@ -259,7 +284,7 @@
     },
     {
       "key": "offset",
-      "label": "Lyrics timing",
+      "label": "Timing",
       "type": "number",
       "unit": "ms",
       "default": 0,
@@ -285,19 +310,62 @@
       "key": "probe_tab",
       "label": "Show the Probe tab (what the car reports)",
       "type": "bool",
-      "default": false
+      "default": false,
+      "short": "Probe tab"
     },
     {
       "key": "hide_back_arrow",
-      "label": "Hide BMW's < tab on the left (the backdrop reaches the edge)",
+      "label": "Hide BMW's < tab on the left",
       "type": "bool",
-      "default": true
+      "default": true,
+      "short": "No < tab"
     },
     {
       "key": "hide_status_bar",
-      "label": "Full screen: hide BMW's top bar (clock, signal, profile)",
+      "label": "Full screen: hide BMW's top bar",
       "type": "bool",
-      "default": true
+      "default": true,
+      "short": "No top bar"
     }
-  ]
+  ],
+  "settingsPages": [
+    [
+      "SCREEN",
+      "Screen",
+      [
+        "arrangement",
+        "style",
+        "theme",
+        "cover_size",
+        "hide_status_bar",
+        "hide_back_arrow"
+      ]
+    ],
+    [
+      "LYRICS",
+      "Lyrics",
+      [
+        "lyrics_size",
+        "word_highlight",
+        "translation",
+        "offset"
+      ]
+    ],
+    [
+      "BACKGROUND",
+      "Background",
+      [
+        "bg_motion",
+        "bg_speed"
+      ]
+    ],
+    [
+      "MORE",
+      "More",
+      [
+        "probe_tab"
+      ]
+    ]
+  ],
+  "settingsMenu": "hmi"
 }
