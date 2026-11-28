@@ -974,5 +974,13 @@
   "Music: soft black behind the cover and names": "音乐：封面和曲目名称后方黑色柔光背景",
   "Music: time left": "音乐：剩余时间",
   "km/h, C": "公里/小时、℃",
-  "mph, F": "英里/小时、℉"
+  "mph, F": "英里/小时、℉",
+  "No misfires": "未检测到失火",
+  "Misfires: -": "失火：—",
+  "Faults: no scan yet": "故障：尚未扫描",
+  "CarPlay sends no arrival data": "CarPlay 未发送到达数据",
+  "Start a route on CarPlay": "请在 CarPlay 中开始导航",
+  "Service interval remaining": "剩余",
+  "Service interval overdue": "已超期",
+  "overdue": "已超期"
 }
